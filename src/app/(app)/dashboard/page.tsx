@@ -50,7 +50,7 @@ async function fetchDashboardKPIs() {
     inventoryValue += qty * (product.cost_price ?? product.selling_price ?? 0);
     if (qty === 0) outOfStockCount++;
     else if (qty <= product.reorder_point) lowStockCount++;
-    if (qty > 0 && qty > product.reorder_point * 10) deadStockCount++;
+    if (product.reorder_point > 0 && qty > product.reorder_point * 10) deadStockCount++;
   }
 
   return {

@@ -148,6 +148,8 @@ export default function InventoryPage() {
   const movementTable = useReactTable({
     data: movements,
     columns: movementColumns,
+    state: { globalFilter },
+    onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   });

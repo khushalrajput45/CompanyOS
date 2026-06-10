@@ -49,7 +49,11 @@ interface PreviewRow extends ImportRow {
 
 const REQUIRED_COLS = ["sku", "name", "unit", "selling_price"];
 
-function validateRow(row: ImportRow, index: number): ValidationError[] {
+function validateRow(
+  row: ImportRow,
+  index: number,
+  seenSkus: Set<string>
+): ValidationError[] {
   const errors: ValidationError[] = [];
   for (const col of REQUIRED_COLS) {
     if (!row[col] && row[col] !== 0) {
@@ -65,6 +69,19 @@ function validateRow(row: ImportRow, index: number): ValidationError[] {
       field: "selling_price",
       message: "Must be a valid non-negative number",
     });
+  }
+  // Duplicate SKU within the file
+  if (row.sku) {
+    const skuKey = String(row.sku).toLowerCase().trim();
+    if (seenSkus.has(skuKey)) {
+      errors.push({
+        row: index + 2,
+        field: "sku",
+        message: `Duplicate SKU "${row.sku}" in this file`,
+      });
+    } else {
+      seenSkus.add(skuKey);
+    }
   }
   return errors;
 }
@@ -86,7 +103,7 @@ export default function ImportPage() {
     setImportStats(null);
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const data = e.target?.result;
       const wb = XLSX.read(data, { type: "binary" });
       const ws = wb.Sheets[wb.SheetNames[0]];
@@ -103,8 +120,9 @@ export default function ImportPage() {
         return out;
       });
 
+      const seenSkus = new Set<string>();
       const previewRows: PreviewRow[] = normalized.map((row, i) => {
-        const errors = validateRow(row, i);
+        const errors = validateRow(row, i, seenSkus);
         return {
           ...row,
           _row: i + 2,
@@ -112,6 +130,39 @@ export default function ImportPage() {
           _errors: errors,
         };
       });
+
+      // Check which SKUs already exist in the DB and mark as warnings (still importable — will upsert)
+      const supabase = createClient();
+      const validSkus = previewRows
+        .filter((r) => r._status === "valid" && r.sku)
+        .map((r) => String(r.sku));
+      if (validSkus.length > 0) {
+        const { data: existing } = await supabase
+          .from("products")
+          .select("sku")
+          .in("sku", validSkus)
+          .is("deleted_at", null);
+        const existingSet = new Set(
+          (existing ?? []).map((p) => p.sku.toLowerCase().trim())
+        );
+        for (const row of previewRows) {
+          if (
+            row._status === "valid" &&
+            row.sku &&
+            existingSet.has(String(row.sku).toLowerCase().trim())
+          ) {
+            row._errors = [
+              ...row._errors,
+              {
+                row: row._row,
+                field: "sku",
+                message: `SKU "${row.sku}" already exists — will be updated`,
+              },
+            ];
+            // Keep status "valid" — upsert will update it, not fail
+          }
+        }
+      }
 
       setPreview(previewRows);
     };
@@ -308,8 +359,10 @@ export default function ImportPage() {
                           <Badge variant="destructive">Error</Badge>
                         ) : row._status === "imported" ? (
                           <Badge className="bg-green-600">Imported</Badge>
+                        ) : row._errors.length > 0 ? (
+                          <Badge variant="outline" className="text-yellow-600 border-yellow-600">Update</Badge>
                         ) : (
-                          <Badge variant="secondary">Valid</Badge>
+                          <Badge variant="secondary">New</Badge>
                         )}
                       </TableCell>
                       {previewColumns.map((col) => (
@@ -323,27 +376,53 @@ export default function ImportPage() {
               </Table>
             </div>
 
-            {preview.some((r) => r._errors.length > 0) && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-destructive" />
-                    Validation Errors
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-1 text-sm">
-                    {preview
-                      .flatMap((r) => r._errors)
-                      .map((e, i) => (
-                        <li key={i} className="text-destructive">
-                          Row {e.row} — {e.field}: {e.message}
-                        </li>
-                      ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            )}
+            {(() => {
+              const allMsgs = preview.flatMap((r) => r._errors);
+              const warnings = allMsgs.filter((e) => e.message.includes("already exists"));
+              const hardErrors = allMsgs.filter((e) => !e.message.includes("already exists"));
+              return (
+                <>
+                  {hardErrors.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-destructive" />
+                          Errors ({hardErrors.length} rows will be skipped)
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-1 text-sm">
+                          {hardErrors.map((e, i) => (
+                            <li key={i} className="text-destructive">
+                              Row {e.row} — {e.field}: {e.message}
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  )}
+                  {warnings.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-yellow-600" />
+                          Warnings ({warnings.length} rows will update existing products)
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-1 text-sm">
+                          {warnings.map((e, i) => (
+                            <li key={i} className="text-yellow-700">
+                              Row {e.row}: {e.message}
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
+              );
+            })()}
           </>
         )}
       </div>

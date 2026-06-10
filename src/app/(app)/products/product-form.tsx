@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -42,6 +43,8 @@ interface Props {
 }
 
 export function ProductForm({ product, onSuccess }: Props) {
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   const {
     register,
     handleSubmit,
@@ -94,6 +97,7 @@ export function ProductForm({ product, onSuccess }: Props) {
   });
 
   async function onSubmit(values: ProductFormData) {
+    setSubmitError(null);
     const supabase = createClient();
     const payload = {
       sku: values.sku,
@@ -113,15 +117,16 @@ export function ProductForm({ product, onSuccess }: Props) {
     };
 
     if (product) {
-      await supabase.from("products").update(payload).eq("id", product.id);
+      const { error } = await supabase
+        .from("products")
+        .update(payload)
+        .eq("id", product.id);
+      if (error) { setSubmitError(error.message); return; }
 
-      // Write price history if selling_price or cost_price changed
       const sellingChanged = values.selling_price !== product.selling_price;
       const costChanged = (values.cost_price ?? null) !== product.cost_price;
       if (sellingChanged || costChanged) {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        const { data: { user } } = await supabase.auth.getUser();
         await supabase.from("price_history").insert({
           product_id: product.id,
           old_selling_price: product.selling_price,
@@ -133,7 +138,15 @@ export function ProductForm({ product, onSuccess }: Props) {
         });
       }
     } else {
-      await supabase.from("products").insert(payload);
+      const { error } = await supabase.from("products").insert(payload);
+      if (error) {
+        setSubmitError(
+          error.message.includes("unique")
+            ? `SKU "${values.sku}" already exists.`
+            : error.message
+        );
+        return;
+      }
     }
     onSuccess();
   }
@@ -267,6 +280,12 @@ export function ProductForm({ product, onSuccess }: Props) {
           </Select>
         </div>
       </div>
+
+      {submitError && (
+        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+          {submitError}
+        </div>
+      )}
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="submit" disabled={isSubmitting}>

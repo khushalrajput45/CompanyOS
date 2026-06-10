@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -15,6 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+const OUT_TYPES = ["sale", "transfer_out", "damage"];
 
 const movementSchema = z.object({
   product_id: z.string().min(1, "Product is required"),
@@ -41,6 +44,8 @@ interface Props {
 }
 
 export function StockMovementForm({ onSuccess }: Props) {
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   const {
     register,
     handleSubmit,
@@ -92,13 +97,53 @@ export function StockMovementForm({ onSuccess }: Props) {
     },
   });
 
+  const productId = watch("product_id");
+  const locationId = watch("location_id");
+  const movementType = watch("movement_type");
+  const quantity = watch("quantity");
+
+  // Live available stock for the selected product+location
+  const { data: currentStock } = useQuery({
+    queryKey: ["stock-check", productId, locationId],
+    queryFn: async () => {
+      if (!productId || !locationId) return null;
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("stock_levels")
+        .select("quantity")
+        .eq("product_id", productId)
+        .eq("location_id", locationId)
+        .maybeSingle();
+      return data?.quantity ?? 0;
+    },
+    enabled: !!productId && !!locationId,
+  });
+
+  const isOutbound = OUT_TYPES.includes(movementType);
+  const wouldGoNegative =
+    isOutbound &&
+    currentStock != null &&
+    Number(quantity) > currentStock;
+
   async function onSubmit(values: MovementFormData) {
+    setSubmitError(null);
+
+    // Guard: prevent negative stock on outbound movements
+    if (OUT_TYPES.includes(values.movement_type) && currentStock != null) {
+      if (values.quantity > currentStock) {
+        setSubmitError(
+          `Insufficient stock. Available: ${currentStock}, requested: ${values.quantity}.`
+        );
+        return;
+      }
+    }
+
     const supabase = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    await supabase.from("stock_movements").insert({
+    const { error } = await supabase.from("stock_movements").insert({
       product_id: values.product_id,
       location_id: values.location_id,
       movement_type: values.movement_type,
@@ -109,18 +154,19 @@ export function StockMovementForm({ onSuccess }: Props) {
       created_by: user?.id ?? null,
     });
 
+    if (error) {
+      setSubmitError(error.message);
+      return;
+    }
+
     onSuccess();
   }
-
-  const movementType = watch("movement_type");
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="space-y-1">
         <Label>Product *</Label>
-        <Select
-          onValueChange={(v) => setValue("product_id", v)}
-        >
+        <Select onValueChange={(v) => setValue("product_id", v)}>
           <SelectTrigger>
             <SelectValue placeholder="Select product" />
           </SelectTrigger>
@@ -155,6 +201,16 @@ export function StockMovementForm({ onSuccess }: Props) {
           <p className="text-xs text-destructive">{errors.location_id.message}</p>
         )}
       </div>
+
+      {/* Show available stock when product+location selected and it's an outbound type */}
+      {isOutbound && currentStock != null && (
+        <p className="text-sm text-muted-foreground">
+          Available at this location:{" "}
+          <span className={currentStock === 0 ? "text-destructive font-semibold" : "font-semibold"}>
+            {currentStock}
+          </span>
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
@@ -191,6 +247,11 @@ export function StockMovementForm({ onSuccess }: Props) {
           {errors.quantity && (
             <p className="text-xs text-destructive">{errors.quantity.message}</p>
           )}
+          {wouldGoNegative && (
+            <p className="text-xs text-destructive">
+              Exceeds available stock ({currentStock})
+            </p>
+          )}
         </div>
       </div>
 
@@ -222,8 +283,14 @@ export function StockMovementForm({ onSuccess }: Props) {
         <Input {...register("notes")} placeholder="Optional notes" />
       </div>
 
+      {submitError && (
+        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+          {submitError}
+        </div>
+      )}
+
       <div className="flex justify-end gap-2 pt-2">
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting || wouldGoNegative}>
           {isSubmitting ? "Saving..." : "Record Movement"}
         </Button>
       </div>
