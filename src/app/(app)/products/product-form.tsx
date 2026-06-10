@@ -114,6 +114,24 @@ export function ProductForm({ product, onSuccess }: Props) {
 
     if (product) {
       await supabase.from("products").update(payload).eq("id", product.id);
+
+      // Write price history if selling_price or cost_price changed
+      const sellingChanged = values.selling_price !== product.selling_price;
+      const costChanged = (values.cost_price ?? null) !== product.cost_price;
+      if (sellingChanged || costChanged) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        await supabase.from("price_history").insert({
+          product_id: product.id,
+          old_selling_price: product.selling_price,
+          new_selling_price: values.selling_price,
+          old_cost_price: product.cost_price ?? null,
+          new_cost_price: values.cost_price ?? null,
+          reason: "Manual update",
+          changed_by: user?.id ?? null,
+        });
+      }
     } else {
       await supabase.from("products").insert(payload);
     }
@@ -196,11 +214,7 @@ export function ProductForm({ product, onSuccess }: Props) {
       <div className="grid grid-cols-3 gap-4">
         <div className="space-y-1">
           <Label>Selling Price (₹) *</Label>
-          <Input
-            type="number"
-            step="0.01"
-            {...register("selling_price")}
-          />
+          <Input type="number" step="0.01" {...register("selling_price")} />
           {errors.selling_price && (
             <p className="text-xs text-destructive">
               {errors.selling_price.message}

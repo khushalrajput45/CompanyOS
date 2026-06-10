@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
 
 export default function SettingsPage() {
   const { data: profile } = useQuery({

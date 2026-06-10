@@ -148,7 +148,7 @@ export default function ImportPage() {
 
       const { error } = await supabase
         .from("products")
-        .upsert(payload, { onConflict: "sku" });
+        .upsert(payload, { onConflict: "organization_id,sku" });
 
       if (error) errors++;
       else success++;

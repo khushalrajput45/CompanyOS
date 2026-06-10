@@ -91,6 +91,7 @@ async function fetchReports() {
   for (const p of products ?? []) {
     const qty = stockByProduct.get(p.id) ?? 0;
 
+    // Reorder: at or below reorder point
     if (qty <= p.reorder_point) {
       reorderItems.push({
         id: p.id,
@@ -103,7 +104,8 @@ async function fetchReports() {
       });
     }
 
-    if (qty > p.reorder_point * 10 && qty > 0) {
+    // Dead stock: only meaningful when reorder_point > 0 and qty is 10x over it
+    if (p.reorder_point > 0 && qty > p.reorder_point * 10) {
       deadStockItems.push({
         id: p.id,
         sku: p.sku,
@@ -150,6 +152,77 @@ function exportToExcel(data: unknown[], filename: string) {
   XLSX.writeFile(wb, `${filename}.xlsx`);
 }
 
+// Defined outside ReportsPage to prevent remounting on every render
+function DataTable<T>({
+  data,
+  columns,
+  isLoading,
+}: {
+  data: T[];
+  columns: ColumnDef<T>[];
+  isLoading: boolean;
+}) {
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
+  return (
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          {table.getHeaderGroups().map((hg) => (
+            <TableRow key={hg.id}>
+              {hg.headers.map((h) => (
+                <TableHead
+                  key={h.id}
+                  onClick={h.column.getToggleSortingHandler()}
+                  className="cursor-pointer select-none"
+                >
+                  {flexRender(h.column.columnDef.header, h.getContext())}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {isLoading ? (
+            <TableRow>
+              <TableCell
+                colSpan={columns.length}
+                className="text-center py-8 text-muted-foreground"
+              >
+                Loading...
+              </TableCell>
+            </TableRow>
+          ) : data.length === 0 ? (
+            <TableRow>
+              <TableCell
+                colSpan={columns.length}
+                className="text-center py-8 text-muted-foreground"
+              >
+                No data
+              </TableCell>
+            </TableRow>
+          ) : (
+            table.getRowModel().rows.map((row) => (
+              <TableRow key={row.id}>
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 export default function ReportsPage() {
   const { data: profile } = useProfile();
   const isAdmin = profile?.role === "admin" || profile?.role === "manager";
@@ -173,7 +246,9 @@ export default function ReportsPage() {
         row.original.current_qty === 0 ? (
           <Badge variant="destructive">Critical</Badge>
         ) : (
-          <Badge variant="outline" className="text-yellow-600 border-yellow-600">Low</Badge>
+          <Badge variant="outline" className="text-yellow-600 border-yellow-600">
+            Low
+          </Badge>
         ),
     },
   ];
@@ -242,74 +317,6 @@ export default function ReportsPage() {
     },
   ];
 
-  function DataTable<T>({
-    data: tableData,
-    columns,
-  }: {
-    data: T[];
-    columns: ColumnDef<T>[];
-  }) {
-    const table = useReactTable({
-      data: tableData,
-      columns,
-      getCoreRowModel: getCoreRowModel(),
-      getSortedRowModel: getSortedRowModel(),
-    });
-
-    return (
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id}>
-                {hg.headers.map((h) => (
-                  <TableHead
-                    key={h.id}
-                    onClick={h.column.getToggleSortingHandler()}
-                    className="cursor-pointer"
-                  >
-                    {flexRender(h.column.columnDef.header, h.getContext())}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="text-center py-8 text-muted-foreground"
-                >
-                  Loading...
-                </TableCell>
-              </TableRow>
-            ) : tableData.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="text-center py-8 text-muted-foreground"
-                >
-                  No data
-                </TableCell>
-              </TableRow>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-    );
-  }
-
   return (
     <div>
       <Header title="Reports" />
@@ -341,6 +348,7 @@ export default function ReportsPage() {
             <DataTable
               data={data?.reorderItems ?? []}
               columns={reorderColumns}
+              isLoading={isLoading}
             />
           </TabsContent>
 
@@ -363,6 +371,7 @@ export default function ReportsPage() {
             <DataTable
               data={data?.deadStockItems ?? []}
               columns={deadStockColumns}
+              isLoading={isLoading}
             />
           </TabsContent>
 
@@ -386,6 +395,7 @@ export default function ReportsPage() {
               <DataTable
                 data={data?.marginItems ?? []}
                 columns={marginColumns}
+                isLoading={isLoading}
               />
             </TabsContent>
           )}
@@ -409,6 +419,7 @@ export default function ReportsPage() {
             <DataTable
               data={data?.warrantyItems ?? []}
               columns={warrantyColumns}
+              isLoading={isLoading}
             />
           </TabsContent>
         </Tabs>
