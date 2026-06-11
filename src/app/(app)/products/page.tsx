@@ -59,6 +59,12 @@ async function fetchProducts(): Promise<Product[]> {
   return data ?? [];
 }
 
+async function fetchStockSummary(): Promise<{ product_id: string; quantity: number }[]> {
+  const supabase = createClient();
+  const { data } = await supabase.from("stock_levels").select("product_id, quantity");
+  return data ?? [];
+}
+
 export default function ProductsPage() {
   const queryClient = useQueryClient();
   const { data: profile } = useProfile();
@@ -76,6 +82,21 @@ export default function ProductsPage() {
     queryFn: fetchProducts,
   });
 
+  const { data: stockLevels = [] } = useQuery({
+    queryKey: ["stock-levels-summary"],
+    queryFn: fetchStockSummary,
+    staleTime: 30000,
+  });
+
+  // Aggregate stock qty per product
+  const stockByProduct = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const sl of stockLevels) {
+      map.set(sl.product_id, (map.get(sl.product_id) ?? 0) + sl.quantity);
+    }
+    return map;
+  }, [stockLevels]);
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const supabase = createClient();
@@ -92,7 +113,6 @@ export default function ProductsPage() {
     onError: (err: Error) => setDeleteError(err.message),
   });
 
-  // Stable action callbacks — don't change unless their deps change
   const openEdit = useCallback((product: Product) => {
     setEditing(product);
     setDialogOpen(true);
@@ -110,7 +130,6 @@ export default function ProductsPage() {
     [deleteMutation]
   );
 
-  // Derived filter lists — only recompute when products changes
   const brands = useMemo(
     () =>
       Array.from(
@@ -125,26 +144,59 @@ export default function ProductsPage() {
     () =>
       Array.from(
         new Map(
-          products
-            .filter((p) => p.category)
-            .map((p) => [p.category!.id, p.category!])
+          products.filter((p) => p.category).map((p) => [p.category!.id, p.category!])
         ).values()
       ),
     [products]
   );
 
-  // Column definitions — memoized, only rebuild when isAdmin or action callbacks change
   const columns = useMemo<ColumnDef<Product>[]>(
     () => [
-      { accessorKey: "sku", header: "SKU", size: 120 },
-      { accessorKey: "name", header: "Product Name" },
-      { accessorFn: (r) => r.brand?.name ?? "—", header: "Brand" },
-      { accessorFn: (r) => r.category?.name ?? "—", header: "Category" },
       {
-        accessorKey: "selling_price",
-        header: "Selling Price",
-        cell: ({ getValue }) =>
-          `₹${(getValue() as number).toLocaleString("en-IN")}`,
+        accessorKey: "sku",
+        header: "SKU",
+        size: 110,
+        cell: ({ getValue }) => (
+          <span className="font-mono text-xs text-muted-foreground">{getValue() as string}</span>
+        ),
+      },
+      {
+        accessorKey: "name",
+        header: "Product Name",
+        cell: ({ getValue }) => (
+          <span className="font-medium text-sm">{getValue() as string}</span>
+        ),
+      },
+      {
+        accessorFn: (r) => r.brand?.name ?? "—",
+        header: "Brand",
+        cell: ({ getValue }) => <span className="text-sm">{getValue() as string}</span>,
+      },
+      {
+        accessorFn: (r) => r.category?.name ?? "—",
+        header: "Category",
+        cell: ({ getValue }) => <span className="text-sm">{getValue() as string}</span>,
+      },
+      {
+        id: "current_stock",
+        header: "Current Stock",
+        cell: ({ row }) => {
+          const qty = stockByProduct.get(row.original.id) ?? 0;
+          const reorder = row.original.reorder_point;
+          return (
+            <span
+              className={`font-semibold text-sm ${
+                qty === 0
+                  ? "text-red-600"
+                  : qty <= reorder
+                  ? "text-yellow-600"
+                  : "text-foreground"
+              }`}
+            >
+              {qty}
+            </span>
+          );
+        },
       },
       ...(isAdmin
         ? [
@@ -158,7 +210,26 @@ export default function ProductsPage() {
             } as ColumnDef<Product>,
           ]
         : []),
-      { accessorKey: "reorder_point", header: "Reorder Pt." },
+      {
+        accessorKey: "selling_price",
+        header: "Selling Price",
+        cell: ({ getValue }) =>
+          `₹${(getValue() as number).toLocaleString("en-IN")}`,
+      },
+      {
+        id: "inventory_value",
+        header: "Inventory Value",
+        cell: ({ row }) => {
+          const qty = stockByProduct.get(row.original.id) ?? 0;
+          const price = row.original.selling_price;
+          const value = qty * price;
+          return (
+            <span className="text-sm font-medium">
+              ₹{value.toLocaleString("en-IN")}
+            </span>
+          );
+        },
+      },
       {
         accessorKey: "is_active",
         header: "Status",
@@ -166,7 +237,7 @@ export default function ProductsPage() {
           <Badge
             variant={getValue() ? "default" : "secondary"}
             className={
-              getValue() ? "bg-green-100 text-green-700 border-green-200" : ""
+              getValue() ? "bg-green-100 text-green-700 border-green-200 text-xs" : "text-xs"
             }
           >
             {getValue() ? "Active" : "Inactive"}
@@ -176,6 +247,7 @@ export default function ProductsPage() {
       {
         id: "actions",
         header: "",
+        size: 70,
         cell: ({ row }) => (
           <div className="flex gap-1">
             <Button
@@ -200,16 +272,14 @@ export default function ProductsPage() {
         ),
       },
     ],
-    [isAdmin, openEdit, handleDelete]
+    [isAdmin, openEdit, handleDelete, stockByProduct]
   );
 
-  // Pre-filtered data (brand/category/status) — memoized
   const filteredData = useMemo(
     () =>
       products.filter((p) => {
         if (brandFilter !== "all" && p.brand?.id !== brandFilter) return false;
-        if (categoryFilter !== "all" && p.category?.id !== categoryFilter)
-          return false;
+        if (categoryFilter !== "all" && p.category?.id !== categoryFilter) return false;
         if (statusFilter === "active" && !p.is_active) return false;
         if (statusFilter === "inactive" && p.is_active) return false;
         return true;
@@ -226,7 +296,7 @@ export default function ProductsPage() {
     getFilteredRowModel: filteredRowModel,
     getSortedRowModel: sortedRowModel,
     getPaginationRowModel: paginationRowModel,
-    initialState: { pagination: { pageSize: 20 } },
+    initialState: { pagination: { pageSize: 25 } },
   });
 
   const totalFiltered = table.getFilteredRowModel().rows.length;
@@ -245,7 +315,7 @@ export default function ProductsPage() {
         }
       />
 
-      <div className="flex-1 p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -265,9 +335,7 @@ export default function ProductsPage() {
             <SelectContent>
               <SelectItem value="all">All Brands</SelectItem>
               {brands.map((b) => (
-                <SelectItem key={b.id} value={b.id}>
-                  {b.name}
-                </SelectItem>
+                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -279,9 +347,7 @@ export default function ProductsPage() {
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
               {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -301,12 +367,7 @@ export default function ProductsPage() {
         {deleteError && (
           <div className="rounded-md bg-destructive/10 px-4 py-2 text-sm text-destructive flex items-center justify-between">
             <span>{deleteError}</span>
-            <button
-              onClick={() => setDeleteError(null)}
-              className="ml-4 text-destructive/70 hover:text-destructive"
-            >
-              ✕
-            </button>
+            <button onClick={() => setDeleteError(null)} className="ml-4 text-destructive/70 hover:text-destructive">✕</button>
           </div>
         )}
 
@@ -322,10 +383,7 @@ export default function ProductsPage() {
                       onClick={header.column.getToggleSortingHandler()}
                       className="cursor-pointer select-none text-xs font-semibold uppercase tracking-wide text-muted-foreground"
                     >
-                      {flexRender(
-                        header.column.columnDef.header,
-                        header.getContext()
-                      )}
+                      {flexRender(header.column.columnDef.header, header.getContext())}
                     </TableHead>
                   ))}
                 </TableRow>
@@ -334,19 +392,13 @@ export default function ProductsPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className="text-center py-12 text-muted-foreground"
-                  >
+                  <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
                     Loading products...
                   </TableCell>
                 </TableRow>
               ) : table.getRowModel().rows.length === 0 ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className="text-center py-12 text-muted-foreground"
-                  >
+                  <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
                     No products found
                   </TableCell>
                 </TableRow>
@@ -354,11 +406,8 @@ export default function ProductsPage() {
                 table.getRowModel().rows.map((row) => (
                   <TableRow key={row.id} className="hover:bg-muted/30">
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="text-sm py-2.5">
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
+                      <TableCell key={cell.id} className="py-2.5">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     ))}
                   </TableRow>
@@ -372,30 +421,14 @@ export default function ProductsPage() {
         {totalFiltered > pageSize && (
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <span>
-              Showing {pageIndex * pageSize + 1}–
-              {Math.min((pageIndex + 1) * pageSize, totalFiltered)} of{" "}
-              {totalFiltered}
+              Showing {pageIndex * pageSize + 1}–{Math.min((pageIndex + 1) * pageSize, totalFiltered)} of {totalFiltered}
             </span>
             <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-              >
+              <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="px-2">
-                Page {pageIndex + 1} of {table.getPageCount()}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-              >
+              <span className="px-2">Page {pageIndex + 1} of {table.getPageCount()}</span>
+              <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
@@ -413,6 +446,7 @@ export default function ProductsPage() {
             onSuccess={() => {
               setDialogOpen(false);
               queryClient.invalidateQueries({ queryKey: ["products"] });
+              queryClient.invalidateQueries({ queryKey: ["stock-levels-summary"] });
             }}
           />
         </DialogContent>

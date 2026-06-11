@@ -41,9 +41,10 @@ type MovementFormData = z.infer<typeof movementSchema>;
 
 interface Props {
   onSuccess: () => void;
+  defaultMovementType?: MovementFormData["movement_type"];
 }
 
-export function StockMovementForm({ onSuccess }: Props) {
+export function StockMovementForm({ onSuccess, defaultMovementType = "receipt" }: Props) {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const {
@@ -55,7 +56,7 @@ export function StockMovementForm({ onSuccess }: Props) {
   } = useForm<MovementFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(movementSchema) as any,
-    defaultValues: { movement_type: "receipt", quantity: 1 },
+    defaultValues: { movement_type: defaultMovementType, quantity: 1 },
   });
 
   const { data: products = [] } = useQuery({

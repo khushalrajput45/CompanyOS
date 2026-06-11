@@ -6,13 +6,10 @@ import {
   useReactTable,
   getCoreRowModel,
   getFilteredRowModel,
+  getPaginationRowModel,
   flexRender,
   type ColumnDef,
 } from "@tanstack/react-table";
-
-// Stable row model factories — created once at module level
-const coreRowModel = getCoreRowModel();
-const filteredRowModel = getFilteredRowModel();
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
@@ -33,30 +30,47 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { StockMovementForm } from "./stock-movement-form";
 import type { StockLevel, StockMovement } from "@/lib/types";
 import { format } from "date-fns";
+import { useProfile } from "@/lib/hooks/useProfile";
+
+// Stable row model factories
+const coreRowModel = getCoreRowModel();
+const filteredRowModel = getFilteredRowModel();
+const paginationRowModel = getPaginationRowModel();
 
 async function fetchStockLevels() {
   const supabase = createClient();
   const { data } = await supabase
     .from("stock_levels")
-    .select("*, product:products(id,sku,name,reorder_point), location:locations(id,name)")
+    .select(
+      "*, product:products(id,sku,name,reorder_point,cost_price,selling_price), location:locations(id,name)"
+    )
     .order("quantity");
-  return (data ?? []) as StockLevel[];
+  return (data ?? []) as (StockLevel & {
+    product: { id: string; sku: string; name: string; reorder_point: number; cost_price: number | null; selling_price: number } | null;
+  })[];
 }
 
 async function fetchMovements() {
   const supabase = createClient();
   const { data } = await supabase
     .from("stock_movements")
-    .select("*, product:products(id,sku,name), location:locations(id,name), vendor:vendors(id,name)")
+    .select(
+      "*, product:products(id,sku,name), location:locations(id,name), vendor:vendors(id,name)"
+    )
     .order("created_at", { ascending: false })
-    .limit(200);
+    .limit(500);
   return (data ?? []) as StockMovement[];
 }
 
+type EnrichedStockLevel = StockLevel & {
+  product: { id: string; sku: string; name: string; reorder_point: number; cost_price: number | null; selling_price: number } | null;
+};
+
+// Defined at module scope to prevent remounting
 function StockTable({
   data,
   columns,
@@ -64,8 +78,8 @@ function StockTable({
   emptyMsg,
   globalFilter,
 }: {
-  data: StockLevel[];
-  columns: ColumnDef<StockLevel>[];
+  data: EnrichedStockLevel[];
+  columns: ColumnDef<EnrichedStockLevel>[];
   loading: boolean;
   emptyMsg: string;
   globalFilter: string;
@@ -76,54 +90,82 @@ function StockTable({
     state: { globalFilter },
     getCoreRowModel: coreRowModel,
     getFilteredRowModel: filteredRowModel,
+    getPaginationRowModel: paginationRowModel,
+    initialState: { pagination: { pageSize: 25 } },
   });
 
+  const total = table.getFilteredRowModel().rows.length;
+  const { pageIndex, pageSize } = table.getState().pagination;
+
   return (
-    <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
-      <Table>
-        <TableHeader>
-          {table.getHeaderGroups().map((hg) => (
-            <TableRow key={hg.id} className="bg-muted/40 hover:bg-muted/40">
-              {hg.headers.map((h) => (
-                <TableHead key={h.id} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {flexRender(h.column.columnDef.header, h.getContext())}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {loading ? (
-            <TableRow>
-              <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
-                Loading...
-              </TableCell>
-            </TableRow>
-          ) : table.getRowModel().rows.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
-                {emptyMsg}
-              </TableCell>
-            </TableRow>
-          ) : (
-            table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id} className="hover:bg-muted/30">
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id} className="text-sm py-2.5">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
+    <div className="space-y-3">
+      <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((hg) => (
+              <TableRow key={hg.id} className="bg-muted/40 hover:bg-muted/40">
+                {hg.headers.map((h) => (
+                  <TableHead
+                    key={h.id}
+                    className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                  >
+                    {flexRender(h.column.columnDef.header, h.getContext())}
+                  </TableHead>
                 ))}
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
+                  Loading...
+                </TableCell>
+              </TableRow>
+            ) : table.getRowModel().rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
+                  {emptyMsg}
+                </TableCell>
+              </TableRow>
+            ) : (
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id} className="hover:bg-muted/30">
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id} className="text-sm py-2.5">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+      {total > pageSize && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            Showing {pageIndex * pageSize + 1}–{Math.min((pageIndex + 1) * pageSize, total)} of {total}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="px-2">Page {pageIndex + 1} of {table.getPageCount()}</span>
+            <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
+  const { data: profile } = useProfile();
+  const isAdmin = profile?.role === "admin" || profile?.role === "manager";
   const [globalFilter, setGlobalFilter] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -137,41 +179,87 @@ export default function InventoryPage() {
     queryFn: fetchMovements,
   });
 
-  const stockColumns = useMemo<ColumnDef<StockLevel>[]>(
+  const stockColumns = useMemo<ColumnDef<EnrichedStockLevel>[]>(
     () => [
-      { accessorFn: (r) => r.product?.sku, header: "SKU" },
-      { accessorFn: (r) => r.product?.name, header: "Product" },
-      { accessorFn: (r) => r.location?.name, header: "Location" },
+      {
+        accessorFn: (r) => r.product?.sku,
+        header: "SKU",
+        cell: ({ getValue }) => (
+          <span className="font-mono text-xs text-muted-foreground">{getValue() as string}</span>
+        ),
+      },
+      {
+        accessorFn: (r) => r.product?.name,
+        header: "Product",
+        cell: ({ getValue }) => (
+          <span className="font-medium text-sm">{getValue() as string}</span>
+        ),
+      },
+      {
+        accessorFn: (r) => r.location?.name,
+        header: "Location",
+      },
       {
         accessorKey: "quantity",
-        header: "Qty on Hand",
+        header: "Current Stock",
         cell: ({ row }) => {
           const qty = row.original.quantity;
           const reorder = row.original.product?.reorder_point ?? 0;
           return (
-            <span className={qty === 0 ? "text-red-600 font-semibold" : qty <= reorder ? "text-yellow-600 font-semibold" : "font-medium"}>
+            <span className={`font-semibold ${qty === 0 ? "text-red-600" : qty <= reorder ? "text-yellow-600" : "text-foreground"}`}>
               {qty}
             </span>
           );
         },
       },
       {
+        id: "available_stock",
+        header: "Available Stock",
+        cell: ({ row }) => {
+          const qty = row.original.quantity;
+          return <span className="font-medium">{qty}</span>;
+        },
+      },
+      {
+        accessorFn: (r) => r.product?.reorder_point,
+        header: "Reorder Level",
+        cell: ({ getValue }) => (
+          <span className="text-muted-foreground">{getValue() as number}</span>
+        ),
+      },
+      ...(isAdmin
+        ? [
+            {
+              id: "inventory_value",
+              header: "Inventory Value",
+              cell: ({ row }: { row: { original: EnrichedStockLevel } }) => {
+                const qty = row.original.quantity;
+                const p = row.original.product;
+                const price = p?.cost_price ?? p?.selling_price ?? 0;
+                return (
+                  <span className="font-medium">
+                    ₹{(qty * price).toLocaleString("en-IN")}
+                  </span>
+                );
+              },
+            } as ColumnDef<EnrichedStockLevel>,
+          ]
+        : []),
+      {
         id: "status",
         header: "Status",
         cell: ({ row }) => {
           const qty = row.original.quantity;
           const reorder = row.original.product?.reorder_point ?? 0;
-          if (qty === 0) return <Badge variant="destructive">Out of Stock</Badge>;
-          if (qty <= reorder) return <Badge variant="outline" className="text-yellow-600 border-yellow-400">Low Stock</Badge>;
-          return <Badge className="bg-green-100 text-green-700 border-green-200">In Stock</Badge>;
+          if (qty === 0)
+            return <Badge variant="destructive" className="text-xs">Out of Stock</Badge>;
+          if (qty <= reorder)
+            return <Badge variant="outline" className="text-yellow-600 border-yellow-400 text-xs">Low Stock</Badge>;
+          return <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">In Stock</Badge>;
         },
       },
-      {
-        accessorFn: (r) => r.product?.reorder_point,
-        header: "Reorder Point",
-      },
     ],
-    []
+    [isAdmin]
   );
 
   const movementColumns = useMemo<ColumnDef<StockMovement>[]>(
@@ -181,39 +269,62 @@ export default function InventoryPage() {
         header: "Date",
         cell: ({ getValue }) => format(new Date(getValue() as string), "dd MMM yyyy HH:mm"),
       },
-      { accessorFn: (r) => r.product?.sku, header: "SKU" },
-      { accessorFn: (r) => r.product?.name, header: "Product" },
-      { accessorFn: (r) => r.location?.name, header: "Location" },
+      { accessorFn: (r) => r.product?.sku, header: "SKU",
+        cell: ({ getValue }) => <span className="font-mono text-xs">{getValue() as string}</span>,
+      },
+      { accessorFn: (r) => (r.product as { name?: string } | null)?.name, header: "Product" },
+      { accessorFn: (r) => (r.location as { name?: string } | null)?.name, header: "Location" },
       {
         accessorKey: "movement_type",
         header: "Type",
-        cell: ({ getValue }) => (
-          <Badge variant="outline" className="capitalize text-xs">
-            {(getValue() as string).replace("_", " ")}
-          </Badge>
-        ),
+        cell: ({ getValue }) => {
+          const t = getValue() as string;
+          const isIn = ["receipt", "transfer_in", "return"].includes(t);
+          return (
+            <Badge
+              variant="outline"
+              className={`capitalize text-xs ${isIn ? "text-green-600 border-green-300 bg-green-50" : "text-red-600 border-red-300 bg-red-50"}`}
+            >
+              {t.replace("_", " ")}
+            </Badge>
+          );
+        },
       },
-      { accessorKey: "quantity", header: "Qty" },
-      { accessorKey: "reference_no", header: "Ref#" },
+      {
+        accessorKey: "quantity",
+        header: "Qty",
+        cell: ({ row }) => {
+          const t = row.original.movement_type;
+          const isIn = ["receipt", "transfer_in", "return"].includes(t);
+          return (
+            <span className={`font-semibold ${isIn ? "text-green-600" : "text-red-600"}`}>
+              {isIn ? "+" : "-"}{row.original.quantity}
+            </span>
+          );
+        },
+      },
+      { accessorKey: "reference_no", header: "Ref #" },
       { accessorKey: "notes", header: "Notes" },
     ],
     []
   );
 
+  // Movement table instance (for Movements tab)
   const movementTable = useReactTable({
     data: movements,
     columns: movementColumns,
     state: { globalFilter },
     getCoreRowModel: coreRowModel,
     getFilteredRowModel: filteredRowModel,
+    getPaginationRowModel: paginationRowModel,
+    initialState: { pagination: { pageSize: 25 } },
   });
 
   const lowStock = useMemo(
-    () =>
-      stockLevels.filter((sl) => {
-        const reorder = sl.product?.reorder_point ?? 0;
-        return sl.quantity > 0 && sl.quantity <= reorder;
-      }),
+    () => stockLevels.filter((sl) => {
+      const reorder = sl.product?.reorder_point ?? 0;
+      return sl.quantity > 0 && sl.quantity <= reorder;
+    }),
     [stockLevels]
   );
 
@@ -221,6 +332,9 @@ export default function InventoryPage() {
     () => stockLevels.filter((sl) => sl.quantity === 0),
     [stockLevels]
   );
+
+  const mvTotal = movementTable.getFilteredRowModel().rows.length;
+  const mvState = movementTable.getState().pagination;
 
   return (
     <div className="flex flex-col h-full">
@@ -235,7 +349,7 @@ export default function InventoryPage() {
         }
       />
 
-      <div className="flex-1 p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
         <div className="relative max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -278,7 +392,7 @@ export default function InventoryPage() {
               data={lowStock}
               columns={stockColumns}
               loading={levelsLoading}
-              emptyMsg="No low stock items"
+              emptyMsg="No low stock items — all levels OK"
               globalFilter={globalFilter}
             />
           </TabsContent>
@@ -293,7 +407,7 @@ export default function InventoryPage() {
             />
           </TabsContent>
 
-          <TabsContent value="movements" className="mt-4">
+          <TabsContent value="movements" className="mt-4 space-y-3">
             <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
               <Table>
                 <TableHeader>
@@ -334,6 +448,22 @@ export default function InventoryPage() {
                 </TableBody>
               </Table>
             </div>
+            {mvTotal > mvState.pageSize && (
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>
+                  Showing {mvState.pageIndex * mvState.pageSize + 1}–{Math.min((mvState.pageIndex + 1) * mvState.pageSize, mvTotal)} of {mvTotal}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => movementTable.previousPage()} disabled={!movementTable.getCanPreviousPage()}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="px-2">Page {mvState.pageIndex + 1} of {movementTable.getPageCount()}</span>
+                  <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => movementTable.nextPage()} disabled={!movementTable.getCanNextPage()}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
@@ -348,6 +478,8 @@ export default function InventoryPage() {
               setDialogOpen(false);
               queryClient.invalidateQueries({ queryKey: ["stock-levels"] });
               queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
+              queryClient.invalidateQueries({ queryKey: ["stock-levels-summary"] });
+              queryClient.invalidateQueries({ queryKey: ["dashboard-kpis"] });
             }}
           />
         </DialogContent>
