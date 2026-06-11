@@ -127,7 +127,7 @@ export function ProductForm({ product, onSuccess }: Props) {
       const costChanged = (values.cost_price ?? null) !== product.cost_price;
       if (sellingChanged || costChanged) {
         const { data: { user } } = await supabase.auth.getUser();
-        await supabase.from("price_history").insert({
+        const { error: phError } = await supabase.from("price_history").insert({
           product_id: product.id,
           old_selling_price: product.selling_price,
           new_selling_price: values.selling_price,
@@ -136,6 +136,7 @@ export function ProductForm({ product, onSuccess }: Props) {
           reason: "Manual update",
           changed_by: user?.id ?? null,
         });
+        if (phError) console.error("price_history insert failed:", phError.message);
       }
     } else {
       const { error } = await supabase.from("products").insert(payload);

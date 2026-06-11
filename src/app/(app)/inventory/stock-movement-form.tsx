@@ -120,10 +120,12 @@ export function StockMovementForm({ onSuccess }: Props) {
   });
 
   const isOutbound = OUT_TYPES.includes(movementType);
+  const parsedQty = Number(quantity);
   const wouldGoNegative =
     isOutbound &&
     currentStock != null &&
-    Number(quantity) > currentStock;
+    !isNaN(parsedQty) &&
+    parsedQty > currentStock;
 
   async function onSubmit(values: MovementFormData) {
     setSubmitError(null);

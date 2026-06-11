@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useReactTable,
@@ -9,6 +9,10 @@ import {
   flexRender,
   type ColumnDef,
 } from "@tanstack/react-table";
+
+// Stable row model factories — created once at module level
+const coreRowModel = getCoreRowModel();
+const filteredRowModel = getFilteredRowModel();
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
@@ -38,9 +42,7 @@ async function fetchStockLevels() {
   const supabase = createClient();
   const { data } = await supabase
     .from("stock_levels")
-    .select(
-      "*, product:products(id,sku,name,reorder_point), location:locations(id,name)"
-    )
+    .select("*, product:products(id,sku,name,reorder_point), location:locations(id,name)")
     .order("quantity");
   return (data ?? []) as StockLevel[];
 }
@@ -49,12 +51,75 @@ async function fetchMovements() {
   const supabase = createClient();
   const { data } = await supabase
     .from("stock_movements")
-    .select(
-      "*, product:products(id,sku,name), location:locations(id,name), vendor:vendors(id,name)"
-    )
+    .select("*, product:products(id,sku,name), location:locations(id,name), vendor:vendors(id,name)")
     .order("created_at", { ascending: false })
     .limit(200);
   return (data ?? []) as StockMovement[];
+}
+
+function StockTable({
+  data,
+  columns,
+  loading,
+  emptyMsg,
+  globalFilter,
+}: {
+  data: StockLevel[];
+  columns: ColumnDef<StockLevel>[];
+  loading: boolean;
+  emptyMsg: string;
+  globalFilter: string;
+}) {
+  const table = useReactTable({
+    data,
+    columns,
+    state: { globalFilter },
+    getCoreRowModel: coreRowModel,
+    getFilteredRowModel: filteredRowModel,
+  });
+
+  return (
+    <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+      <Table>
+        <TableHeader>
+          {table.getHeaderGroups().map((hg) => (
+            <TableRow key={hg.id} className="bg-muted/40 hover:bg-muted/40">
+              {hg.headers.map((h) => (
+                <TableHead key={h.id} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {flexRender(h.column.columnDef.header, h.getContext())}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {loading ? (
+            <TableRow>
+              <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
+                Loading...
+              </TableCell>
+            </TableRow>
+          ) : table.getRowModel().rows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
+                {emptyMsg}
+              </TableCell>
+            </TableRow>
+          ) : (
+            table.getRowModel().rows.map((row) => (
+              <TableRow key={row.id} className="hover:bg-muted/30">
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id} className="text-sm py-2.5">
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  );
 }
 
 export default function InventoryPage() {
@@ -72,165 +137,170 @@ export default function InventoryPage() {
     queryFn: fetchMovements,
   });
 
-  const levelColumns: ColumnDef<StockLevel>[] = [
-    { accessorFn: (r) => r.product?.sku, header: "SKU" },
-    { accessorFn: (r) => r.product?.name, header: "Product" },
-    { accessorFn: (r) => r.location?.name, header: "Location" },
-    {
-      accessorKey: "quantity",
-      header: "Qty",
-      cell: ({ row }) => {
-        const qty = row.original.quantity;
-        const reorder = row.original.product?.reorder_point ?? 0;
-        return (
-          <span
-            className={
-              qty === 0
-                ? "text-red-600 font-semibold"
-                : qty <= reorder
-                ? "text-yellow-600 font-semibold"
-                : ""
-            }
-          >
-            {qty}
-          </span>
-        );
+  const stockColumns = useMemo<ColumnDef<StockLevel>[]>(
+    () => [
+      { accessorFn: (r) => r.product?.sku, header: "SKU" },
+      { accessorFn: (r) => r.product?.name, header: "Product" },
+      { accessorFn: (r) => r.location?.name, header: "Location" },
+      {
+        accessorKey: "quantity",
+        header: "Qty on Hand",
+        cell: ({ row }) => {
+          const qty = row.original.quantity;
+          const reorder = row.original.product?.reorder_point ?? 0;
+          return (
+            <span className={qty === 0 ? "text-red-600 font-semibold" : qty <= reorder ? "text-yellow-600 font-semibold" : "font-medium"}>
+              {qty}
+            </span>
+          );
+        },
       },
-    },
-    {
-      id: "status",
-      header: "Status",
-      cell: ({ row }) => {
-        const qty = row.original.quantity;
-        const reorder = row.original.product?.reorder_point ?? 0;
-        if (qty === 0)
-          return <Badge variant="destructive">Out of Stock</Badge>;
-        if (qty <= reorder)
-          return <Badge variant="outline" className="text-yellow-600 border-yellow-600">Low Stock</Badge>;
-        return <Badge variant="secondary">OK</Badge>;
+      {
+        id: "status",
+        header: "Status",
+        cell: ({ row }) => {
+          const qty = row.original.quantity;
+          const reorder = row.original.product?.reorder_point ?? 0;
+          if (qty === 0) return <Badge variant="destructive">Out of Stock</Badge>;
+          if (qty <= reorder) return <Badge variant="outline" className="text-yellow-600 border-yellow-400">Low Stock</Badge>;
+          return <Badge className="bg-green-100 text-green-700 border-green-200">In Stock</Badge>;
+        },
       },
-    },
-  ];
+      {
+        accessorFn: (r) => r.product?.reorder_point,
+        header: "Reorder Point",
+      },
+    ],
+    []
+  );
 
-  const movementColumns: ColumnDef<StockMovement>[] = [
-    {
-      accessorKey: "created_at",
-      header: "Date",
-      cell: ({ getValue }) =>
-        format(new Date(getValue() as string), "dd MMM yyyy HH:mm"),
-    },
-    { accessorFn: (r) => r.product?.sku, header: "SKU" },
-    { accessorFn: (r) => r.product?.name, header: "Product" },
-    { accessorFn: (r) => r.location?.name, header: "Location" },
-    {
-      accessorKey: "movement_type",
-      header: "Type",
-      cell: ({ getValue }) => (
-        <Badge variant="outline" className="capitalize">
-          {(getValue() as string).replace("_", " ")}
-        </Badge>
-      ),
-    },
-    { accessorKey: "quantity", header: "Qty" },
-    { accessorKey: "reference_no", header: "Ref#" },
-    { accessorKey: "notes", header: "Notes" },
-  ];
-
-  const levelTable = useReactTable({
-    data: stockLevels,
-    columns: levelColumns,
-    state: { globalFilter },
-    onGlobalFilterChange: setGlobalFilter,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-  });
+  const movementColumns = useMemo<ColumnDef<StockMovement>[]>(
+    () => [
+      {
+        accessorKey: "created_at",
+        header: "Date",
+        cell: ({ getValue }) => format(new Date(getValue() as string), "dd MMM yyyy HH:mm"),
+      },
+      { accessorFn: (r) => r.product?.sku, header: "SKU" },
+      { accessorFn: (r) => r.product?.name, header: "Product" },
+      { accessorFn: (r) => r.location?.name, header: "Location" },
+      {
+        accessorKey: "movement_type",
+        header: "Type",
+        cell: ({ getValue }) => (
+          <Badge variant="outline" className="capitalize text-xs">
+            {(getValue() as string).replace("_", " ")}
+          </Badge>
+        ),
+      },
+      { accessorKey: "quantity", header: "Qty" },
+      { accessorKey: "reference_no", header: "Ref#" },
+      { accessorKey: "notes", header: "Notes" },
+    ],
+    []
+  );
 
   const movementTable = useReactTable({
     data: movements,
     columns: movementColumns,
     state: { globalFilter },
-    onGlobalFilterChange: setGlobalFilter,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
+    getCoreRowModel: coreRowModel,
+    getFilteredRowModel: filteredRowModel,
   });
 
+  const lowStock = useMemo(
+    () =>
+      stockLevels.filter((sl) => {
+        const reorder = sl.product?.reorder_point ?? 0;
+        return sl.quantity > 0 && sl.quantity <= reorder;
+      }),
+    [stockLevels]
+  );
+
+  const outOfStock = useMemo(
+    () => stockLevels.filter((sl) => sl.quantity === 0),
+    [stockLevels]
+  );
+
   return (
-    <div>
-      <Header title="Inventory" />
-      <div className="p-6 space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search inventory..."
-              value={globalFilter}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
+    <div className="flex flex-col h-full">
+      <Header
+        title="Inventory"
+        subtitle={`${stockLevels.length} stock locations`}
+        actions={
+          <Button size="sm" onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-1.5" />
             Record Movement
           </Button>
+        }
+      />
+
+      <div className="flex-1 p-6 space-y-4">
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search inventory..."
+            value={globalFilter}
+            onChange={(e) => setGlobalFilter(e.target.value)}
+            className="pl-9 h-9"
+          />
         </div>
 
-        <Tabs defaultValue="levels">
-          <TabsList>
-            <TabsTrigger value="levels">Stock Levels</TabsTrigger>
-            <TabsTrigger value="movements">Movements</TabsTrigger>
+        <Tabs defaultValue="current">
+          <TabsList className="bg-muted/60">
+            <TabsTrigger value="current">
+              Current Stock
+              <Badge variant="secondary" className="ml-2 text-xs">{stockLevels.length}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="low">
+              Low Stock
+              <Badge variant="outline" className="ml-2 text-xs text-yellow-600 border-yellow-400">{lowStock.length}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="out">
+              Out of Stock
+              <Badge variant="destructive" className="ml-2 text-xs">{outOfStock.length}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="movements">Stock Movement</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="levels" className="mt-4">
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  {levelTable.getHeaderGroups().map((hg) => (
-                    <TableRow key={hg.id}>
-                      {hg.headers.map((h) => (
-                        <TableHead key={h.id}>
-                          {flexRender(h.column.columnDef.header, h.getContext())}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableHeader>
-                <TableBody>
-                  {levelsLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                        Loading...
-                      </TableCell>
-                    </TableRow>
-                  ) : levelTable.getRowModel().rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                        No stock data
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    levelTable.getRowModel().rows.map((row) => (
-                      <TableRow key={row.id}>
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id}>
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+          <TabsContent value="current" className="mt-4">
+            <StockTable
+              data={stockLevels}
+              columns={stockColumns}
+              loading={levelsLoading}
+              emptyMsg="No stock data"
+              globalFilter={globalFilter}
+            />
+          </TabsContent>
+
+          <TabsContent value="low" className="mt-4">
+            <StockTable
+              data={lowStock}
+              columns={stockColumns}
+              loading={levelsLoading}
+              emptyMsg="No low stock items"
+              globalFilter={globalFilter}
+            />
+          </TabsContent>
+
+          <TabsContent value="out" className="mt-4">
+            <StockTable
+              data={outOfStock}
+              columns={stockColumns}
+              loading={levelsLoading}
+              emptyMsg="No out-of-stock items"
+              globalFilter={globalFilter}
+            />
           </TabsContent>
 
           <TabsContent value="movements" className="mt-4">
-            <div className="rounded-md border">
+            <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
               <Table>
                 <TableHeader>
                   {movementTable.getHeaderGroups().map((hg) => (
-                    <TableRow key={hg.id}>
+                    <TableRow key={hg.id} className="bg-muted/40 hover:bg-muted/40">
                       {hg.headers.map((h) => (
-                        <TableHead key={h.id}>
+                        <TableHead key={h.id} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           {flexRender(h.column.columnDef.header, h.getContext())}
                         </TableHead>
                       ))}
@@ -240,21 +310,21 @@ export default function InventoryPage() {
                 <TableBody>
                   {movementsLoading ? (
                     <TableRow>
-                      <TableCell colSpan={movementColumns.length} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={movementColumns.length} className="text-center py-12 text-muted-foreground">
                         Loading...
                       </TableCell>
                     </TableRow>
                   ) : movementTable.getRowModel().rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={movementColumns.length} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={movementColumns.length} className="text-center py-12 text-muted-foreground">
                         No movements recorded
                       </TableCell>
                     </TableRow>
                   ) : (
                     movementTable.getRowModel().rows.map((row) => (
-                      <TableRow key={row.id}>
+                      <TableRow key={row.id} className="hover:bg-muted/30">
                         {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id}>
+                          <TableCell key={cell.id} className="text-sm py-2.5">
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                           </TableCell>
                         ))}

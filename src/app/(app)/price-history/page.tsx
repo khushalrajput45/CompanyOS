@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-table";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/header";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -20,10 +21,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search } from "lucide-react";
+import { Search, Download, TrendingUp, TrendingDown } from "lucide-react";
 import type { PriceHistory } from "@/lib/types";
 import { format } from "date-fns";
 import { useProfile } from "@/lib/hooks/useProfile";
+import * as XLSX from "xlsx";
 
 async function fetchPriceHistory() {
   const supabase = createClient();
@@ -49,8 +51,7 @@ export default function PriceHistoryPage() {
     {
       accessorKey: "created_at",
       header: "Date",
-      cell: ({ getValue }) =>
-        format(new Date(getValue() as string), "dd MMM yyyy HH:mm"),
+      cell: ({ getValue }) => format(new Date(getValue() as string), "dd MMM yyyy HH:mm"),
     },
     { accessorFn: (r) => r.product?.sku, header: "SKU" },
     { accessorFn: (r) => r.product?.name, header: "Product" },
@@ -58,15 +59,20 @@ export default function PriceHistoryPage() {
       accessorKey: "old_selling_price",
       header: "Old Selling ₹",
       cell: ({ getValue }) =>
-        getValue() != null
-          ? `₹${(getValue() as number).toLocaleString("en-IN")}`
-          : "—",
+        getValue() != null ? `₹${(getValue() as number).toLocaleString("en-IN")}` : "—",
     },
     {
       accessorKey: "new_selling_price",
       header: "New Selling ₹",
-      cell: ({ getValue }) =>
-        `₹${(getValue() as number).toLocaleString("en-IN")}`,
+      cell: ({ row, getValue }) => {
+        const up = (getValue() as number) > (row.original.old_selling_price ?? 0);
+        return (
+          <span className={`flex items-center gap-1 font-medium ${up ? "text-green-600" : "text-red-600"}`}>
+            {up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+            ₹{(getValue() as number).toLocaleString("en-IN")}
+          </span>
+        );
+      },
     },
     ...(isAdmin
       ? [
@@ -74,17 +80,13 @@ export default function PriceHistoryPage() {
             accessorKey: "old_cost_price",
             header: "Old Cost ₹",
             cell: ({ getValue }: { getValue: () => unknown }) =>
-              getValue() != null
-                ? `₹${(getValue() as number).toLocaleString("en-IN")}`
-                : "—",
+              getValue() != null ? `₹${(getValue() as number).toLocaleString("en-IN")}` : "—",
           } as ColumnDef<PriceHistory>,
           {
             accessorKey: "new_cost_price",
             header: "New Cost ₹",
             cell: ({ getValue }: { getValue: () => unknown }) =>
-              getValue() != null
-                ? `₹${(getValue() as number).toLocaleString("en-IN")}`
-                : "—",
+              getValue() != null ? `₹${(getValue() as number).toLocaleString("en-IN")}` : "—",
           } as ColumnDef<PriceHistory>,
         ]
       : []),
@@ -100,27 +102,53 @@ export default function PriceHistoryPage() {
     getFilteredRowModel: getFilteredRowModel(),
   });
 
+  function exportExcel() {
+    const ws = XLSX.utils.json_to_sheet(
+      data.map((r) => ({
+        date: r.created_at ? format(new Date(r.created_at), "dd MMM yyyy") : "",
+        sku: r.product?.sku,
+        product: r.product?.name,
+        old_selling: r.old_selling_price,
+        new_selling: r.new_selling_price,
+        reason: r.reason,
+      }))
+    );
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Price History");
+    XLSX.writeFile(wb, "price-history.xlsx");
+  }
+
   return (
-    <div>
-      <Header title="Price History" />
-      <div className="p-6 space-y-4">
+    <div className="flex flex-col h-full">
+      <Header
+        title="Price History"
+        subtitle={`${table.getFilteredRowModel().rows.length} records`}
+        actions={
+          <Button variant="outline" size="sm" onClick={exportExcel}>
+            <Download className="h-4 w-4 mr-1.5" />
+            Export
+          </Button>
+        }
+      />
+
+      <div className="flex-1 p-6 space-y-4">
         <div className="relative max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search..."
+            placeholder="Search by product or SKU..."
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
-            className="pl-9"
+            className="pl-9 h-9"
           />
         </div>
 
-        <div className="rounded-md border">
+        <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((hg) => (
-                <TableRow key={hg.id}>
+                <TableRow key={hg.id} className="bg-muted/40 hover:bg-muted/40">
                   {hg.headers.map((h) => (
-                    <TableHead key={h.id}>
+                    <TableHead key={h.id} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       {flexRender(h.column.columnDef.header, h.getContext())}
                     </TableHead>
                   ))}
@@ -130,21 +158,21 @@ export default function PriceHistoryPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
                     Loading...
                   </TableCell>
                 </TableRow>
               ) : table.getRowModel().rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
                     No price history found
                   </TableCell>
                 </TableRow>
               ) : (
                 table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id}>
+                  <TableRow key={row.id} className="hover:bg-muted/30">
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
+                      <TableCell key={cell.id} className="text-sm py-2.5">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     ))}
@@ -154,9 +182,6 @@ export default function PriceHistoryPage() {
             </TableBody>
           </Table>
         </div>
-        <p className="text-sm text-muted-foreground">
-          {table.getFilteredRowModel().rows.length} records
-        </p>
       </div>
     </div>
   );
