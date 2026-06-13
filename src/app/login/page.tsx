@@ -3,8 +3,8 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, Suspense } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,9 +19,15 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>;
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlError = searchParams.get("error");
   const [error, setError] = useState<string | null>(null);
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotStatus, setForgotStatus] = useState<"idle" | "sending" | "sent">("idle");
+  const [forgotError, setForgotError] = useState<string | null>(null);
 
   const {
     register,
@@ -46,6 +52,86 @@ export default function LoginPage() {
 
     router.push("/dashboard");
     router.refresh();
+  }
+
+  async function handleForgotPassword() {
+    if (!forgotEmail) {
+      setForgotError("Please enter your email address.");
+      return;
+    }
+    setForgotStatus("sending");
+    setForgotError(null);
+    const supabase = createClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) {
+      setForgotError(error.message);
+      setForgotStatus("idle");
+      return;
+    }
+    setForgotStatus("sent");
+  }
+
+  if (showForgot) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center space-y-2">
+            <div className="flex justify-center">
+              <Building2 className="h-10 w-10 text-primary" />
+            </div>
+            <CardTitle className="text-2xl">Reset Password</CardTitle>
+            <CardDescription>
+              {forgotStatus === "sent"
+                ? "Check your email for the reset link."
+                : "Enter your email to receive a password reset link."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {forgotStatus === "sent" ? (
+              <div className="rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-700 text-center">
+                Reset email sent to <strong>{forgotEmail}</strong>.<br />
+                Check your inbox and follow the link.
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="forgot-email">Email</Label>
+                  <Input
+                    id="forgot-email"
+                    type="email"
+                    placeholder="you@company.com"
+                    value={forgotEmail}
+                    onChange={e => setForgotEmail(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") handleForgotPassword(); }}
+                  />
+                </div>
+                {forgotError && (
+                  <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                    {forgotError}
+                  </div>
+                )}
+                <Button
+                  className="w-full"
+                  disabled={forgotStatus === "sending"}
+                  onClick={handleForgotPassword}
+                >
+                  {forgotStatus === "sending" ? "Sending…" : "Send Reset Link"}
+                </Button>
+              </>
+            )}
+            <Button
+              variant="ghost"
+              className="w-full"
+              onClick={() => { setShowForgot(false); setForgotStatus("idle"); setForgotEmail(""); setForgotError(null); }}
+            >
+              Back to Sign In
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -74,7 +160,16 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <button
+                  type="button"
+                  onClick={() => setShowForgot(true)}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </div>
               <Input
                 id="password"
                 type="password"
@@ -86,9 +181,9 @@ export default function LoginPage() {
               )}
             </div>
 
-            {error && (
+            {(urlError || error) && (
               <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
+                {urlError ?? error}
               </div>
             )}
 
@@ -99,5 +194,13 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageContent />
+    </Suspense>
   );
 }

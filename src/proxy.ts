@@ -25,22 +25,62 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const { data: { user } } = await supabase.auth.getUser();
   const { pathname } = request.nextUrl;
 
-  if (!user && pathname !== "/login") {
+  const isPublicRoute =
+    pathname === "/" ||
+    pathname === "/login" ||
+    pathname.startsWith("/login") ||
+    pathname === "/register" ||
+    pathname.startsWith("/register") ||
+    pathname === "/reset-password" ||
+    pathname.startsWith("/reset-password") ||
+    pathname.startsWith("/auth/callback");
+
+  // Not logged in → redirect to login (landing page "/" is public, not login)
+  if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  if (user && (pathname === "/login" || pathname === "/")) {
+  // Logged in on landing/login/register → redirect to dashboard
+  if (user && (pathname === "/" || pathname === "/login" || pathname.startsWith("/register"))) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
+  }
+
+  // Check is_disabled for authenticated users on protected routes
+  if (user && !isPublicRoute) {
+    try {
+      const { data: profile, error: profileErr } = await supabase
+        .from("profiles")
+        .select("is_disabled")
+        .eq("id", user.id)
+        .single();
+
+      if (profileErr || profile?.is_disabled) {
+        await supabase.auth.signOut();
+        const url = request.nextUrl.clone();
+        url.pathname = "/login";
+        url.searchParams.set(
+          "error",
+          profile?.is_disabled
+            ? "Your account has been disabled. Contact your administrator."
+            : "Unable to verify your account. Please sign in again."
+        );
+        return NextResponse.redirect(url);
+      }
+    } catch {
+      // On unexpected error, sign out and require re-auth (fail closed)
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("error", "Session verification failed. Please sign in again.");
+      return NextResponse.redirect(url);
+    }
   }
 
   return supabaseResponse;

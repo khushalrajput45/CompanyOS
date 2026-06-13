@@ -17,6 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Product } from "@/lib/types";
+import { BrandCategoryManager } from "@/components/ui/brand-category-manager";
+import { preventDecimalInput } from "@/lib/utils";
 
 const productSchema = z.object({
   sku: z.string().min(1, "SKU is required"),
@@ -28,9 +30,9 @@ const productSchema = z.object({
   selling_price: z.coerce.number().min(0, "Must be >= 0"),
   cost_price: z.coerce.number().min(0).optional(),
   mrp: z.coerce.number().min(0).optional(),
-  reorder_point: z.coerce.number().min(0).default(0),
-  reorder_qty: z.coerce.number().min(0).default(0),
-  warranty_months: z.coerce.number().min(0).optional(),
+  reorder_point: z.coerce.number().int("Quantity must be a whole number").min(0).default(0),
+  reorder_qty: z.coerce.number().int("Quantity must be a whole number").min(0).default(0),
+  warranty_months: z.coerce.number().int("Must be a whole number").min(0).optional(),
   hsn_code: z.string().optional(),
   is_active: z.boolean().default(true),
 });
@@ -79,6 +81,7 @@ export function ProductForm({ product, onSuccess }: Props) {
       const { data } = await supabase
         .from("brands")
         .select("id, name")
+        .is("deleted_at", null)
         .order("name");
       return data ?? [];
     },
@@ -91,6 +94,7 @@ export function ProductForm({ product, onSuccess }: Props) {
       const { data } = await supabase
         .from("categories")
         .select("id, name")
+        .is("deleted_at", null)
         .order("name");
       return data ?? [];
     },
@@ -136,7 +140,11 @@ export function ProductForm({ product, onSuccess }: Props) {
           reason: "Manual update",
           changed_by: user?.id ?? null,
         });
-        if (phError) console.error("price_history insert failed:", phError.message);
+        if (phError) {
+          // Product was saved; only the audit trail failed. Show a warning but still close.
+          // eslint-disable-next-line no-console
+          console.warn("price_history insert failed:", phError.message);
+        }
       }
     } else {
       const { error } = await supabase.from("products").insert(payload);
@@ -189,39 +197,51 @@ export function ProductForm({ product, onSuccess }: Props) {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
           <Label>Brand</Label>
-          <Select
-            value={watch("brand_id") ?? ""}
-            onValueChange={(v) => setValue("brand_id", v || undefined)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select brand" />
-            </SelectTrigger>
-            <SelectContent>
-              {brands.map((b) => (
-                <SelectItem key={b.id} value={b.id}>
-                  {b.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2">
+            <Select
+              value={watch("brand_id") ?? ""}
+              onValueChange={(v) => setValue("brand_id", v || undefined)}
+            >
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Select brand" />
+              </SelectTrigger>
+              <SelectContent>
+                {brands.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <BrandCategoryManager
+              type="brand"
+              onCreated={(id) => setValue("brand_id", id)}
+            />
+          </div>
         </div>
         <div className="space-y-1">
           <Label>Category</Label>
-          <Select
-            value={watch("category_id") ?? ""}
-            onValueChange={(v) => setValue("category_id", v || undefined)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2">
+            <Select
+              value={watch("category_id") ?? ""}
+              onValueChange={(v) => setValue("category_id", v || undefined)}
+            >
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <BrandCategoryManager
+              type="category"
+              onCreated={(id) => setValue("category_id", id)}
+            />
+          </div>
         </div>
       </div>
 
@@ -248,15 +268,24 @@ export function ProductForm({ product, onSuccess }: Props) {
       <div className="grid grid-cols-3 gap-4">
         <div className="space-y-1">
           <Label>Reorder Point</Label>
-          <Input type="number" {...register("reorder_point")} />
+          <Input type="number" step={1} min={0} onKeyDown={preventDecimalInput} {...register("reorder_point")} />
+          {errors.reorder_point && (
+            <p className="text-xs text-destructive">{errors.reorder_point.message}</p>
+          )}
         </div>
         <div className="space-y-1">
           <Label>Reorder Qty</Label>
-          <Input type="number" {...register("reorder_qty")} />
+          <Input type="number" step={1} min={0} onKeyDown={preventDecimalInput} {...register("reorder_qty")} />
+          {errors.reorder_qty && (
+            <p className="text-xs text-destructive">{errors.reorder_qty.message}</p>
+          )}
         </div>
         <div className="space-y-1">
           <Label>Warranty (months)</Label>
-          <Input type="number" {...register("warranty_months")} />
+          <Input type="number" step={1} min={0} onKeyDown={preventDecimalInput} {...register("warranty_months")} />
+          {errors.warranty_months && (
+            <p className="text-xs text-destructive">{errors.warranty_months.message}</p>
+          )}
         </div>
       </div>
 

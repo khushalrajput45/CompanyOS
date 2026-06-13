@@ -9,6 +9,9 @@ import {
   flexRender,
   type ColumnDef,
 } from "@tanstack/react-table";
+
+const coreRowModel     = getCoreRowModel();
+const filteredRowModel = getFilteredRowModel();
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
@@ -45,6 +48,7 @@ export default function PriceHistoryPage() {
   const { data = [], isLoading } = useQuery({
     queryKey: ["price-history"],
     queryFn: fetchPriceHistory,
+    staleTime: 30000,
   });
 
   const columns: ColumnDef<PriceHistory>[] = [
@@ -98,8 +102,8 @@ export default function PriceHistoryPage() {
     columns,
     state: { globalFilter },
     onGlobalFilterChange: setGlobalFilter,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
+    getCoreRowModel: coreRowModel,
+    getFilteredRowModel: filteredRowModel,
   });
 
   function exportExcel() {

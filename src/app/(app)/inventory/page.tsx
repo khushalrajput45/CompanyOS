@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
 import {
   useReactTable,
   getCoreRowModel,
@@ -30,6 +31,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Plus, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { StockMovementForm } from "./stock-movement-form";
 import type { StockLevel, StockMovement } from "@/lib/types";
@@ -162,21 +170,35 @@ function StockTable({
   );
 }
 
-export default function InventoryPage() {
+const IN_TYPES  = ["receipt", "transfer_in", "return", "adjustment"];
+const OUT_TYPES = ["sale", "transfer_out", "damage"];
+type TabValue = "current" | "low" | "out" | "movements";
+
+function InventoryPageContent() {
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { data: profile } = useProfile();
   const isAdmin = profile?.role === "admin" || profile?.role === "manager";
+
+  // URL-driven initial state
+  const [activeTab, setActiveTab]     = useState<TabValue>((searchParams.get("tab") as TabValue) ?? "current");
+  const [movTypeFilter, setMovTypeFilter] = useState<"all"|"in"|"out">((searchParams.get("movType") as "all"|"in"|"out") ?? "all");
+  const [movDateFilter, setMovDateFilter] = useState<"all"|"today">((searchParams.get("movDate") as "all"|"today") ?? "all");
+  const [movRefFilter, setMovRefFilter]   = useState(searchParams.get("movRef") ?? "");
+
   const [globalFilter, setGlobalFilter] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const { data: stockLevels = [], isLoading: levelsLoading } = useQuery({
     queryKey: ["stock-levels"],
     queryFn: fetchStockLevels,
+    staleTime: 30000,
   });
 
   const { data: movements = [], isLoading: movementsLoading } = useQuery({
     queryKey: ["stock-movements"],
     queryFn: fetchMovements,
+    staleTime: 30000,
   });
 
   const stockColumns = useMemo<ColumnDef<EnrichedStockLevel>[]>(
@@ -309,11 +331,24 @@ export default function InventoryPage() {
     []
   );
 
+  // Apply movement filters
+  const filteredMovements = useMemo(() => {
+    return movements.filter(mv => {
+      if (movTypeFilter === "in"  && !IN_TYPES.includes(mv.movement_type))  return false;
+      if (movTypeFilter === "out" && !OUT_TYPES.includes(mv.movement_type)) return false;
+      if (movDateFilter === "today") {
+        const today = new Date(); today.setHours(0,0,0,0);
+        if (new Date(mv.created_at as string) < today) return false;
+      }
+      return true;
+    });
+  }, [movements, movTypeFilter, movDateFilter]);
+
   // Movement table instance (for Movements tab)
   const movementTable = useReactTable({
-    data: movements,
+    data: filteredMovements,
     columns: movementColumns,
-    state: { globalFilter },
+    state: { globalFilter: movRefFilter || globalFilter },
     getCoreRowModel: coreRowModel,
     getFilteredRowModel: filteredRowModel,
     getPaginationRowModel: paginationRowModel,
@@ -360,7 +395,7 @@ export default function InventoryPage() {
           />
         </div>
 
-        <Tabs defaultValue="current">
+        <Tabs value={activeTab} onValueChange={v => setActiveTab(v as TabValue)}>
           <TabsList className="bg-muted/60">
             <TabsTrigger value="current">
               Current Stock
@@ -408,6 +443,35 @@ export default function InventoryPage() {
           </TabsContent>
 
           <TabsContent value="movements" className="mt-4 space-y-3">
+            {/* Movement filters */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={movTypeFilter} onValueChange={v => { setMovTypeFilter(v as "all"|"in"|"out"); setMovRefFilter(""); }}>
+                <SelectTrigger className="w-36 h-8 text-xs">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="in">Stock In</SelectItem>
+                  <SelectItem value="out">Stock Out</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={movDateFilter} onValueChange={v => { setMovDateFilter(v as "all"|"today"); setMovRefFilter(""); }}>
+                <SelectTrigger className="w-28 h-8 text-xs">
+                  <SelectValue placeholder="All Time" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Time</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                </SelectContent>
+              </Select>
+              {movRefFilter && (
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-blue-50 border border-blue-200 text-xs text-blue-700">
+                  Ref: {movRefFilter}
+                  <button onClick={() => setMovRefFilter("")} className="ml-1 hover:text-blue-900">✕</button>
+                </div>
+              )}
+              <span className="text-xs text-muted-foreground ml-auto">{filteredMovements.length} movement{filteredMovements.length !== 1 ? "s" : ""}</span>
+            </div>
             <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
               <Table>
                 <TableHeader>
@@ -485,5 +549,13 @@ export default function InventoryPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function InventoryPage() {
+  return (
+    <Suspense>
+      <InventoryPageContent />
+    </Suspense>
   );
 }

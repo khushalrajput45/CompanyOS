@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
 import {
   useReactTable,
   getCoreRowModel,
@@ -37,7 +38,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Search, Pencil, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { Plus, Search, Pencil, Archive, RotateCcw, ChevronLeft, ChevronRight, TrendingUp, History } from "lucide-react";
 import type { Product } from "@/lib/types";
 import { ProductForm } from "./product-form";
 import { useProfile } from "@/lib/hooks/useProfile";
@@ -48,15 +50,17 @@ const filteredRowModel = getFilteredRowModel();
 const sortedRowModel = getSortedRowModel();
 const paginationRowModel = getPaginationRowModel();
 
-async function fetchProducts(): Promise<Product[]> {
+async function fetchProducts(archived = false): Promise<Product[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  const baseQuery = supabase
     .from("products")
     .select("*, brand:brands(id,name), category:categories(id,name)")
-    .is("deleted_at", null)
     .order("name");
+  const { data, error } = archived
+    ? await baseQuery.not("deleted_at", "is", null)
+    : await baseQuery.is("deleted_at", null);
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []) as unknown as Product[];
 }
 
 async function fetchStockSummary(): Promise<{ product_id: string; quantity: number }[]> {
@@ -65,22 +69,37 @@ async function fetchStockSummary(): Promise<{ product_id: string; quantity: numb
   return data ?? [];
 }
 
-export default function ProductsPage() {
+function ProductsPageContent() {
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { data: profile } = useProfile();
-  const isAdmin = profile?.role === "admin" || profile?.role === "manager";
-  const [globalFilter, setGlobalFilter] = useState("");
-  const [brandFilter, setBrandFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  // Use false until after hydration so server/client column structure matches
+  const isAdmin = mounted && (profile?.role === "admin" || profile?.role === "manager");
+  // Initialize filters from URL params (dashboard drill-down)
+  const [globalFilter, setGlobalFilter]     = useState(searchParams.get("search") ?? "");
+  const [brandFilter, setBrandFilter]       = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState(searchParams.get("categoryId") ?? "all");
+  const [statusFilter, setStatusFilter]     = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
-  const { data: products = [], isLoading } = useQuery({
-    queryKey: ["products"],
-    queryFn: fetchProducts,
+  const { data: activeProducts = [], isLoading } = useQuery({
+    queryKey: ["products", "active"],
+    queryFn: () => fetchProducts(false),
+    staleTime: 30000,
   });
+
+  const { data: archivedProducts = [] } = useQuery({
+    queryKey: ["products", "archived"],
+    queryFn: () => fetchProducts(true),
+    staleTime: 30000,
+  });
+
+  const products = showArchived ? archivedProducts : activeProducts;
 
   const { data: stockLevels = [] } = useQuery({
     queryKey: ["stock-levels-summary"],
@@ -98,17 +117,18 @@ export default function ProductsPage() {
   }, [stockLevels]);
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ id, archive }: { id: string; archive: boolean }) => {
       const supabase = createClient();
       const { error } = await supabase
         .from("products")
-        .update({ deleted_at: new Date().toISOString() })
+        .update({ deleted_at: archive ? new Date().toISOString() : null })
         .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       setDeleteError(null);
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["products", "active"] });
+      queryClient.invalidateQueries({ queryKey: ["products", "archived"] });
     },
     onError: (err: Error) => setDeleteError(err.message),
   });
@@ -124,8 +144,10 @@ export default function ProductsPage() {
   }, []);
 
   const handleDelete = useCallback(
-    (id: string) => {
-      if (confirm("Delete this product?")) deleteMutation.mutate(id);
+    (id: string, name: string) => {
+      if (confirm(`Archive product "${name}"? All inventory history is preserved.`)) {
+        deleteMutation.mutate({ id, archive: true });
+      }
     },
     [deleteMutation]
   );
@@ -247,44 +269,58 @@ export default function ProductsPage() {
       {
         id: "actions",
         header: "",
-        size: 70,
+        size: 90,
         cell: ({ row }) => (
           <div className="flex gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0"
-              onClick={() => openEdit(row.original)}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            {isAdmin && (
+            {!row.original.deleted_at && (
               <Button
                 size="sm"
                 variant="ghost"
                 className="h-7 w-7 p-0"
-                onClick={() => handleDelete(row.original.id)}
+                onClick={() => openEdit(row.original)}
               >
-                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                <Pencil className="h-3.5 w-3.5" />
               </Button>
+            )}
+            {isAdmin && (
+              row.original.deleted_at ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1.5 px-2 text-xs"
+                  onClick={() => deleteMutation.mutate({ id: row.original.id, archive: false })}
+                >
+                  <RotateCcw className="h-3 w-3" />Restore
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0"
+                  onClick={() => handleDelete(row.original.id, row.original.name)}
+                >
+                  <Archive className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+              )
             )}
           </div>
         ),
       },
     ],
-    [isAdmin, openEdit, handleDelete, stockByProduct]
+    [isAdmin, openEdit, handleDelete, deleteMutation, stockByProduct]
   );
 
   const filteredData = useMemo(
     () =>
       products.filter((p) => {
+        if (showArchived) return true;
         if (brandFilter !== "all" && p.brand?.id !== brandFilter) return false;
         if (categoryFilter !== "all" && p.category?.id !== categoryFilter) return false;
         if (statusFilter === "active" && !p.is_active) return false;
         if (statusFilter === "inactive" && p.is_active) return false;
         return true;
       }),
-    [products, brandFilter, categoryFilter, statusFilter]
+    [products, brandFilter, categoryFilter, statusFilter, showArchived]
   );
 
   const table = useReactTable({
@@ -308,10 +344,33 @@ export default function ProductsPage() {
         title="Products"
         subtitle={`${totalFiltered} product${totalFiltered !== 1 ? "s" : ""}`}
         actions={
-          <Button size="sm" onClick={openAdd}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            Add Product
-          </Button>
+          <div className="flex items-center gap-2">
+            {(showArchived || archivedProducts.length > 0) && (
+              <Button size="sm" variant={showArchived ? "default" : "outline"}
+                onClick={() => setShowArchived(v => !v)}>
+                <Archive className="h-3.5 w-3.5 mr-1.5" />
+                {showArchived ? "Hide Archived" : archivedProducts.length > 0 ? `Archived (${archivedProducts.length})` : "Archived"}
+              </Button>
+            )}
+            <Link href="/price-history">
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <TrendingUp className="h-3.5 w-3.5" />
+                Price History
+              </Button>
+            </Link>
+            <Link href="/quantity-history">
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <History className="h-3.5 w-3.5" />
+                Qty History
+              </Button>
+            </Link>
+            {!showArchived && (
+              <Button size="sm" onClick={openAdd}>
+                <Plus className="h-4 w-4 mr-1.5" />
+                Add Product
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -445,12 +504,20 @@ export default function ProductsPage() {
             product={editing}
             onSuccess={() => {
               setDialogOpen(false);
-              queryClient.invalidateQueries({ queryKey: ["products"] });
+              queryClient.invalidateQueries({ queryKey: ["products", "active"] });
               queryClient.invalidateQueries({ queryKey: ["stock-levels-summary"] });
             }}
           />
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense>
+      <ProductsPageContent />
+    </Suspense>
   );
 }

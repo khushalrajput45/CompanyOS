@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
 import {
   useReactTable,
   getCoreRowModel,
@@ -78,29 +79,37 @@ interface SlowMovingItem {
 
 async function fetchReports() {
   const supabase = createClient();
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const thirtyDaysAgo  = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const ninetyDaysAgo  = new Date(); ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-  const [{ data: products }, { data: stockLevels }, { data: recentMovements }, { data: movementCounts }] =
-    await Promise.all([
-      supabase
-        .from("products")
-        .select("id, sku, name, cost_price, selling_price, reorder_point, reorder_qty, unit")
-        .is("deleted_at", null)
-        .eq("is_active", true),
-      supabase.from("stock_levels").select("product_id, quantity"),
-      supabase
-        .from("stock_movements")
-        .select(
-          "id, movement_type, quantity, created_at, reference_no, product:products(sku,name), location:locations(name)"
-        )
-        .order("created_at", { ascending: false })
-        .limit(200),
-      supabase
-        .from("stock_movements")
-        .select("product_id, quantity")
-        .gte("created_at", thirtyDaysAgo.toISOString()),
-    ]);
+  const [
+    { data: products },
+    { data: stockLevels },
+    { data: recentMovements },
+    { data: movementCounts },
+    { data: recentlyMoved },
+  ] = await Promise.all([
+    supabase
+      .from("products")
+      .select("id, sku, name, cost_price, selling_price, reorder_point, reorder_qty, unit")
+      .is("deleted_at", null)
+      .eq("is_active", true),
+    supabase.from("stock_levels").select("product_id, quantity"),
+    supabase
+      .from("stock_movements")
+      .select("id, movement_type, quantity, created_at, reference_no, product:products(sku,name), location:locations(name)")
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("stock_movements")
+      .select("product_id, quantity")
+      .gte("created_at", thirtyDaysAgo.toISOString()),
+    // For dead stock: products with ANY movement in last 90 days
+    supabase
+      .from("stock_movements")
+      .select("product_id")
+      .gte("created_at", ninetyDaysAgo.toISOString()),
+  ]);
 
   const stockByProduct = new Map<string, number>();
   for (const sl of stockLevels ?? []) {
@@ -111,6 +120,9 @@ async function fetchReports() {
   for (const mv of movementCounts ?? []) {
     movCountByProduct.set(mv.product_id, (movCountByProduct.get(mv.product_id) ?? 0) + mv.quantity);
   }
+
+  // Dead stock: qty > 0 AND no movement in last 90 days
+  const recentlyMovedIds = new Set((recentlyMoved ?? []).map(m => m.product_id));
 
   const inventoryItems: InventoryItem[] = [];
   const reorderItems: ReorderItem[] = [];
@@ -135,7 +147,8 @@ async function fetchReports() {
       reorderItems.push({ id: p.id, sku: p.sku, name: p.name, current_qty: qty, reorder_point: p.reorder_point, reorder_qty: p.reorder_qty, unit: p.unit });
     }
 
-    if (p.reorder_point > 0 && qty > p.reorder_point * 10) {
+    // Dead stock: qty > 0 AND no movement in last 90 days
+    if (qty > 0 && !recentlyMovedIds.has(p.id)) {
       deadStockItems.push({ id: p.id, sku: p.sku, name: p.name, current_qty: qty, cost_price: costPrice, total_value: costValue });
     }
 
@@ -262,15 +275,21 @@ function DataTable<T>({
 
 type ReportKey = "valuation" | "lowstock" | "dead" | "movement" | "fast" | "slow";
 
-export default function ReportsPage() {
+function ReportsPageContent() {
+  const searchParams = useSearchParams();
   const { data: profile } = useProfile();
   const isAdmin = profile?.role === "admin" || profile?.role === "manager";
-  const [activeReport, setActiveReport] = useState<ReportKey | null>(null);
+
+  // Initialize from URL param (dashboard drill-down)
+  const [activeReport, setActiveReport] = useState<ReportKey | null>(
+    (searchParams.get("type") as ReportKey | null) ?? null
+  );
 
   const { data, isLoading } = useQuery({
     queryKey: ["reports"],
     queryFn: fetchReports,
     staleTime: 60000,
+    enabled: isAdmin,
   });
 
   const reportCards = useMemo(
@@ -301,7 +320,7 @@ export default function ReportsPage() {
         {
           key: "dead" as ReportKey,
           title: "Dead Stock",
-          description: "Excess stock (over 10x reorder point)",
+          description: "Products in stock with no movement in 90+ days",
           icon: Clock,
           iconBg: "bg-orange-50",
           iconColor: "text-orange-600",
@@ -363,21 +382,21 @@ export default function ReportsPage() {
               accessorKey: "cost_value",
               header: "Cost Value",
               cell: ({ getValue }: { getValue: () => unknown }) =>
-                `₹${(getValue() as number).toLocaleString("en-IN")}`,
+                getValue() != null ? `₹${(getValue() as number).toLocaleString("en-IN")}` : "—",
             } as ColumnDef<InventoryItem>,
           ]
         : []),
       {
         accessorKey: "selling_price",
         header: "Sale ₹",
-        cell: ({ getValue }) => `₹${(getValue() as number).toLocaleString("en-IN")}`,
+        cell: ({ getValue }) => getValue() != null ? `₹${(getValue() as number).toLocaleString("en-IN")}` : "—",
       },
       {
         accessorKey: "sale_value",
         header: "Sale Value",
         cell: ({ getValue }) => (
           <span className="font-medium text-green-700">
-            ₹{(getValue() as number).toLocaleString("en-IN")}
+            {getValue() != null ? `₹${(getValue() as number).toLocaleString("en-IN")}` : "—"}
           </span>
         ),
       },
@@ -432,7 +451,7 @@ export default function ReportsPage() {
               accessorKey: "total_value",
               header: "Total Value",
               cell: ({ getValue }: { getValue: () => unknown }) =>
-                `₹${(getValue() as number).toLocaleString("en-IN")}`,
+                getValue() != null ? `₹${(getValue() as number).toLocaleString("en-IN")}` : "—",
             } as ColumnDef<DeadStockItem>,
           ]
         : []),
@@ -497,7 +516,7 @@ export default function ReportsPage() {
               accessorKey: "stale_value",
               header: "Stale Value",
               cell: ({ getValue }: { getValue: () => unknown }) =>
-                `₹${(getValue() as number).toLocaleString("en-IN")}`,
+                getValue() != null ? `₹${(getValue() as number).toLocaleString("en-IN")}` : "—",
             } as ColumnDef<SlowMovingItem>,
           ]
         : []),
@@ -518,6 +537,17 @@ export default function ReportsPage() {
     }),
     [data, inventoryColumns, reorderColumns, deadStockColumns, movementColumns, fastColumns, slowColumns]
   );
+
+  if (profile && !isAdmin) {
+    return (
+      <div className="flex flex-col h-full">
+        <Header title="Reports" subtitle="Inventory analytics and export" />
+        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+          Reports are only accessible to admins and managers.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -584,5 +614,13 @@ export default function ReportsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ReportsPage() {
+  return (
+    <Suspense>
+      <ReportsPageContent />
+    </Suspense>
   );
 }

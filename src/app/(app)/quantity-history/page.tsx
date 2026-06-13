@@ -9,6 +9,9 @@ import {
   flexRender,
   type ColumnDef,
 } from "@tanstack/react-table";
+
+const coreRowModel     = getCoreRowModel();
+const filteredRowModel = getFilteredRowModel();
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
@@ -64,11 +67,13 @@ export default function QuantityHistoryPage() {
         .order("name");
       return data ?? [];
     },
+    staleTime: 30000,
   });
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["quantity-history", selectedProduct],
     queryFn: () => fetchMovementLedger(selectedProduct === "all" ? undefined : selectedProduct),
+    staleTime: 30000,
   });
 
   const columns: ColumnDef<StockMovement>[] = [
@@ -113,8 +118,8 @@ export default function QuantityHistoryPage() {
     columns,
     state: { globalFilter },
     onGlobalFilterChange: setGlobalFilter,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
+    getCoreRowModel: coreRowModel,
+    getFilteredRowModel: filteredRowModel,
   });
 
   function exportExcel() {
