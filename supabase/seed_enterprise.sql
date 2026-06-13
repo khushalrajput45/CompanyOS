@@ -1,9 +1,8 @@
 -- ================================================================
--- CompanyOS — Enterprise IT Hardware + CCTV + Networking Seed v2
--- Target: Inventory Cost ₹1.0Cr–₹1.2Cr (realistic working stock)
--- Includes: Low stock, Out of stock, Dead stock, Today movements
+-- CompanyOS — Enterprise IT Hardware + CCTV + Networking Seed
+-- Target: Inventory Cost ₹1.2Cr–₹1.4Cr | Sale ₹1.5Cr–₹1.7Cr
 --
--- Run in Supabase SQL Editor (Dashboard → SQL Editor → Run)
+-- Run this in the Supabase SQL Editor (Dashboard → SQL Editor → Run)
 -- Safe to run multiple times — skips if Hikvision brand already exists.
 -- ================================================================
 
@@ -70,6 +69,7 @@ BEGIN
   -- ════════════════════════════════════════════════════════════
   -- BRANDS
   -- ════════════════════════════════════════════════════════════
+  -- Reuse existing brands if present (old seed may have created them)
   SELECT id INTO b_dell FROM brands WHERE organization_id = v_org_id AND name = 'Dell' LIMIT 1;
   IF b_dell IS NULL THEN
     INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'Dell') RETURNING id INTO b_dell;
@@ -85,14 +85,6 @@ BEGIN
     INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'Lenovo') RETURNING id INTO b_lenovo;
   END IF;
 
-  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'Hikvision')  RETURNING id INTO b_hikvision;
-  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'Dahua')      RETURNING id INTO b_dahua;
-  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'CP Plus')    RETURNING id INTO b_cpplus;
-  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'TP-Link')    RETURNING id INTO b_tplink;
-  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'Cisco')      RETURNING id INTO b_cisco;
-  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'WD')         RETURNING id INTO b_wd;
-  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'Seagate')    RETURNING id INTO b_seagate;
-
   SELECT id INTO b_samsung FROM brands WHERE organization_id = v_org_id AND name = 'Samsung' LIMIT 1;
   IF b_samsung IS NULL THEN
     INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'Samsung') RETURNING id INTO b_samsung;
@@ -103,10 +95,17 @@ BEGIN
     INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'Logitech') RETURNING id INTO b_logitech;
   END IF;
 
-  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'APC')    RETURNING id INTO b_apc;
-  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'D-Link') RETURNING id INTO b_dlink;
-  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'Canon')  RETURNING id INTO b_canon;
-  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'Epson')  RETURNING id INTO b_epson;
+  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'Hikvision')  RETURNING id INTO b_hikvision;
+  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'Dahua')      RETURNING id INTO b_dahua;
+  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'CP Plus')    RETURNING id INTO b_cpplus;
+  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'TP-Link')    RETURNING id INTO b_tplink;
+  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'Cisco')      RETURNING id INTO b_cisco;
+  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'WD')         RETURNING id INTO b_wd;
+  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'Seagate')    RETURNING id INTO b_seagate;
+  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'APC')        RETURNING id INTO b_apc;
+  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'D-Link')     RETURNING id INTO b_dlink;
+  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'Canon')      RETURNING id INTO b_canon;
+  INSERT INTO brands (organization_id, name) VALUES (v_org_id, 'Epson')      RETURNING id INTO b_epson;
 
   -- ════════════════════════════════════════════════════════════
   -- CATEGORIES
@@ -123,27 +122,42 @@ BEGIN
   -- ════════════════════════════════════════════════════════════
   -- VENDORS
   -- ════════════════════════════════════════════════════════════
-  INSERT INTO vendors (organization_id, name, contact_person, email, phone)
-  VALUES (v_org_id, 'TechSupply India Pvt Ltd', 'Rajesh Sharma', 'rajesh@techsupply.in', '9876543210')
-  RETURNING id INTO v_techsup;
+  SELECT id INTO v_techsup FROM vendors WHERE organization_id = v_org_id AND name = 'TechSupply India' LIMIT 1;
+  IF v_techsup IS NULL THEN
+    INSERT INTO vendors (organization_id, name, contact_name, phone, email, gstin, is_active)
+    VALUES (v_org_id, 'TechSupply India', 'Rajesh Kumar', '9876543210', 'rajesh@techsupply.in', '27AABCT1332L1ZS', true)
+    RETURNING id INTO v_techsup;
+  END IF;
 
-  INSERT INTO vendors (organization_id, name, contact_person, email, phone)
-  VALUES (v_org_id, 'DigiMart Wholesale', 'Priya Patel', 'priya@digimart.co.in', '9765432109')
-  RETURNING id INTO v_digimart;
+  SELECT id INTO v_digimart FROM vendors WHERE organization_id = v_org_id AND name = 'DigiMart Wholesale' LIMIT 1;
+  IF v_digimart IS NULL THEN
+    INSERT INTO vendors (organization_id, name, contact_name, phone, email, gstin, is_active)
+    VALUES (v_org_id, 'DigiMart Wholesale', 'Priya Sharma', '9123456780', 'priya@digimart.in', '07AAACG2115R1ZN', true)
+    RETURNING id INTO v_digimart;
+  END IF;
 
-  INSERT INTO vendors (organization_id, name, contact_person, email, phone)
-  VALUES (v_org_id, 'CCTV Supplies Direct', 'Arjun Nair', 'arjun@cctvsupplies.in', '9654321098')
+  INSERT INTO vendors (organization_id, name, contact_name, phone, email, gstin, is_active)
+  VALUES (v_org_id, 'CCTV Systems Hub', 'Manish Patel', '9988776655', 'manish@cctvhub.in', '24AABCT9988M1ZV', true)
   RETURNING id INTO v_cctvsup;
 
   -- ════════════════════════════════════════════════════════════
-  -- LOCATION
+  -- LOCATIONS
   -- ════════════════════════════════════════════════════════════
-  INSERT INTO locations (organization_id, name, address)
-  VALUES (v_org_id, 'Main Warehouse', 'Shop 12, Lamington Road, Mumbai 400 007')
-  RETURNING id INTO l_main;
+  SELECT id INTO l_main FROM locations WHERE organization_id = v_org_id AND name = 'Main Warehouse' LIMIT 1;
+  IF l_main IS NULL THEN
+    INSERT INTO locations (organization_id, name, type, is_active)
+    VALUES (v_org_id, 'Main Warehouse', 'warehouse', true)
+    RETURNING id INTO l_main;
+  END IF;
 
   -- ════════════════════════════════════════════════════════════
-  -- PRODUCTS  (50 products)
+  -- PRODUCTS
+  -- Cost value targets by category:
+  --   Laptops    ≈ ₹34 L   Desktops   ≈ ₹7.7 L
+  --   CCTV Cam   ≈ ₹28 L   DVR/NVR    ≈ ₹15 L
+  --   Networking ≈ ₹10 L   Storage    ≈ ₹18 L
+  --   Accessories≈ ₹5 L    Printers   ≈ ₹5 L
+  --   TOTAL      ≈ ₹1.22 Cr
   -- ════════════════════════════════════════════════════════════
 
   -- ── LAPTOPS ─────────────────────────────────────────────────
@@ -298,183 +312,122 @@ BEGIN
   INSERT INTO products (organization_id,sku,name,brand_id,category_id,unit,cost_price,selling_price,mrp,reorder_point,reorder_qty,warranty_months,hsn_code,is_active)
   VALUES (v_org_id,'PRN-HP-M404N','HP LaserJet Pro M404n Network B&W Laser Printer',b_hp,c_printers,'pcs',24000,28500,29999,2,4,12,'84433190',true) RETURNING id INTO p48;
 
+  -- (Extra 2 printers use temp variables — re-declare in nested block not needed, reuse p41/p42 vars)
+  -- Canon and Epson inserted without stock var capture (stock added below via INSERT)
+
   -- ════════════════════════════════════════════════════════════
-  -- STOCK MOVEMENTS
-  -- Strategy:
-  --   • DEAD STOCK (5 products): receipts 120 days ago, no other movements
-  --     → p22 Hik 16CH DVR, p25 Hik 16CH NVR, p32 Cisco SG350P,
-  --       p44 APC 1KVA, p45 Cat6 Box
-  --   • MAIN STOCK: receipts 30 days ago
-  --   • LOW STOCK (8 products): partial sale 14 days ago → below reorder
-  --     → p05 HP EB840, p06 Len ThinkPad, p21 Hik 8CH DVR,
-  --       p24 Hik 8CH NVR, p28 TPL 24P, p37 WD 4TB, p40 Sam SSD, p43 APC 650
-  --   • OUT OF STOCK (3 products): full sale 7 days ago → qty=0
-  --     → p14 Hik 8MP IP, p31 Cisco SF110, p47 HP M111w
-  --   • TODAY movements: fresh receipts + sales
+  -- STOCK MOVEMENTS  (trigger auto-updates stock_levels)
+  -- Quantities set to hit ≈₹1.22 Cr cost value
   -- ════════════════════════════════════════════════════════════
 
-  -- ── DEAD STOCK RECEIPTS (120 days ago — no subsequent movements) ──────
-  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by,created_at) VALUES
-    (v_org_id,p22,l_main,'receipt',15,'PO-OLD-001',v_cctvsup,v_user_id, now() - interval '120 days'),  -- Hik 16CH DVR  ×15
-    (v_org_id,p25,l_main,'receipt',12,'PO-OLD-002',v_cctvsup,v_user_id, now() - interval '120 days'),  -- Hik 16CH NVR  ×12
-    (v_org_id,p32,l_main,'receipt',5, 'PO-OLD-003',v_techsup,v_user_id, now() - interval '120 days'),  -- Cisco SG350P  ×5
-    (v_org_id,p44,l_main,'receipt',15,'PO-OLD-004',v_techsup,v_user_id, now() - interval '120 days'),  -- APC 1KVA      ×15
-    (v_org_id,p45,l_main,'receipt',22,'PO-OLD-005',v_digimart,v_user_id,now() - interval '120 days');  -- Cat6 Box      ×22
+  -- ── Laptops ─────────────────────────────────────────────────
+  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by) VALUES
+    (v_org_id,p01,l_main,'receipt',8, 'PO-LAP-001',v_techsup,v_user_id),   -- Dell Lat 3420 ×8  =₹4.16L
+    (v_org_id,p02,l_main,'receipt',6, 'PO-LAP-001',v_techsup,v_user_id),   -- Dell Lat 5430 ×6  =₹4.32L
+    (v_org_id,p03,l_main,'receipt',12,'PO-LAP-001',v_techsup,v_user_id),   -- Dell Ins 3520 ×12 =₹5.76L
+    (v_org_id,p04,l_main,'receipt',8, 'PO-LAP-002',v_digimart,v_user_id),  -- HP ProBook  ×8  =₹4.56L
+    (v_org_id,p05,l_main,'receipt',5, 'PO-LAP-002',v_digimart,v_user_id),  -- HP EliteBook×5  =₹4.40L
+    (v_org_id,p06,l_main,'receipt',10,'PO-LAP-003',v_techsup,v_user_id),   -- Len ThinkPad×10 =₹5.80L
+    (v_org_id,p07,l_main,'receipt',14,'PO-LAP-003',v_techsup,v_user_id);   -- Len IdeaPad ×14 =₹4.90L
 
-  -- ── MAIN RECEIPTS (30 days ago — all non-dead-stock products) ────────
-  -- Laptops
-  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by,created_at) VALUES
-    (v_org_id,p01,l_main,'receipt',8, 'PO-LAP-001',v_techsup, v_user_id, now() - interval '30 days'),
-    (v_org_id,p02,l_main,'receipt',6, 'PO-LAP-001',v_techsup, v_user_id, now() - interval '30 days'),
-    (v_org_id,p03,l_main,'receipt',12,'PO-LAP-001',v_techsup, v_user_id, now() - interval '30 days'),
-    (v_org_id,p04,l_main,'receipt',8, 'PO-LAP-002',v_digimart,v_user_id, now() - interval '30 days'),
-    (v_org_id,p05,l_main,'receipt',5, 'PO-LAP-002',v_digimart,v_user_id, now() - interval '30 days'),
-    (v_org_id,p06,l_main,'receipt',10,'PO-LAP-003',v_techsup, v_user_id, now() - interval '30 days'),
-    (v_org_id,p07,l_main,'receipt',14,'PO-LAP-003',v_techsup, v_user_id, now() - interval '30 days');
+  -- ── Desktops ─────────────────────────────────────────────────
+  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by) VALUES
+    (v_org_id,p08,l_main,'receipt',8,'PO-DES-001',v_techsup,v_user_id),    -- Dell Opt   ×8  =₹3.36L
+    (v_org_id,p09,l_main,'receipt',6,'PO-DES-001',v_techsup,v_user_id),    -- HP ProDesk ×6  =₹2.40L
+    (v_org_id,p10,l_main,'receipt',5,'PO-DES-001',v_digimart,v_user_id);   -- Len Think  ×5  =₹1.90L
 
-  -- Desktops
-  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by,created_at) VALUES
-    (v_org_id,p08,l_main,'receipt',8,'PO-DES-001',v_techsup, v_user_id, now() - interval '30 days'),
-    (v_org_id,p09,l_main,'receipt',6,'PO-DES-001',v_techsup, v_user_id, now() - interval '30 days'),
-    (v_org_id,p10,l_main,'receipt',5,'PO-DES-001',v_digimart,v_user_id, now() - interval '30 days');
+  -- ── CCTV Cameras ─────────────────────────────────────────────
+  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by) VALUES
+    (v_org_id,p11,l_main,'receipt',180,'PO-CAM-001',v_cctvsup,v_user_id),  -- Hik 2MP IP   ×180=₹5.76L
+    (v_org_id,p12,l_main,'receipt',100,'PO-CAM-001',v_cctvsup,v_user_id),  -- Hik 4MP Clr  ×100=₹5.80L
+    (v_org_id,p13,l_main,'receipt',250,'PO-CAM-001',v_cctvsup,v_user_id),  -- Hik 2MP AHD  ×250=₹4.50L
+    (v_org_id,p14,l_main,'receipt',40, 'PO-CAM-002',v_cctvsup,v_user_id),  -- Hik 8MP IP   ×40 =₹3.00L
+    (v_org_id,p15,l_main,'receipt',150,'PO-CAM-002',v_cctvsup,v_user_id),  -- Dah 2MP IP   ×150=₹4.35L
+    (v_org_id,p16,l_main,'receipt',100,'PO-CAM-002',v_cctvsup,v_user_id),  -- Dah 4MP IP   ×100=₹4.80L
+    (v_org_id,p17,l_main,'receipt',200,'PO-CAM-003',v_cctvsup,v_user_id),  -- Dah 2MP AIO  ×200=₹3.20L
+    (v_org_id,p18,l_main,'receipt',120,'PO-CAM-003',v_cctvsup,v_user_id),  -- CPP 2MP IP   ×120=₹2.88L
+    (v_org_id,p19,l_main,'receipt',60, 'PO-CAM-003',v_cctvsup,v_user_id);  -- CPP 4MP IP   ×60 =₹2.52L
 
-  -- CCTV Cameras (p14 will be zeroed out, p11-p13/p15-p19 normal)
-  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by,created_at) VALUES
-    (v_org_id,p11,l_main,'receipt',180,'PO-CAM-001',v_cctvsup,v_user_id, now() - interval '30 days'),
-    (v_org_id,p12,l_main,'receipt',100,'PO-CAM-001',v_cctvsup,v_user_id, now() - interval '30 days'),
-    (v_org_id,p13,l_main,'receipt',250,'PO-CAM-001',v_cctvsup,v_user_id, now() - interval '30 days'),
-    (v_org_id,p14,l_main,'receipt',40, 'PO-CAM-002',v_cctvsup,v_user_id, now() - interval '30 days'),
-    (v_org_id,p15,l_main,'receipt',150,'PO-CAM-002',v_cctvsup,v_user_id, now() - interval '30 days'),
-    (v_org_id,p16,l_main,'receipt',100,'PO-CAM-002',v_cctvsup,v_user_id, now() - interval '30 days'),
-    (v_org_id,p17,l_main,'receipt',200,'PO-CAM-003',v_cctvsup,v_user_id, now() - interval '30 days'),
-    (v_org_id,p18,l_main,'receipt',120,'PO-CAM-003',v_cctvsup,v_user_id, now() - interval '30 days'),
-    (v_org_id,p19,l_main,'receipt',60, 'PO-CAM-003',v_cctvsup,v_user_id, now() - interval '30 days');
+  -- ── DVR / NVR ─────────────────────────────────────────────────
+  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by) VALUES
+    (v_org_id,p20,l_main,'receipt',60,'PO-DVR-001',v_cctvsup,v_user_id),   -- Hik 4CH DVR ×60=₹2.70L
+    (v_org_id,p21,l_main,'receipt',40,'PO-DVR-001',v_cctvsup,v_user_id),   -- Hik 8CH DVR ×40=₹3.00L
+    (v_org_id,p22,l_main,'receipt',15,'PO-DVR-001',v_cctvsup,v_user_id),   -- Hik 16CH DVR×15=₹2.10L
+    (v_org_id,p23,l_main,'receipt',45,'PO-NVR-001',v_cctvsup,v_user_id),   -- Hik 4CH NVR ×45=₹2.48L
+    (v_org_id,p24,l_main,'receipt',28,'PO-NVR-001',v_cctvsup,v_user_id),   -- Hik 8CH NVR ×28=₹2.66L
+    (v_org_id,p25,l_main,'receipt',12,'PO-NVR-001',v_cctvsup,v_user_id),   -- Hik 16CH NVR×12=₹2.16L
+    (v_org_id,p26,l_main,'receipt',45,'PO-DVR-002',v_cctvsup,v_user_id),   -- Dah 4CH DVR ×45=₹1.89L
+    (v_org_id,p27,l_main,'receipt',25,'PO-NVR-002',v_cctvsup,v_user_id);   -- Dah 8CH NVR ×25=₹2.13L
 
-  -- DVR/NVR (p21 low stock, p22 dead, p24 low stock, p25 dead)
-  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by,created_at) VALUES
-    (v_org_id,p20,l_main,'receipt',60,'PO-DVR-001',v_cctvsup,v_user_id, now() - interval '30 days'),
-    (v_org_id,p21,l_main,'receipt',40,'PO-DVR-001',v_cctvsup,v_user_id, now() - interval '30 days'),
-    (v_org_id,p23,l_main,'receipt',45,'PO-NVR-001',v_cctvsup,v_user_id, now() - interval '30 days'),
-    (v_org_id,p24,l_main,'receipt',28,'PO-NVR-001',v_cctvsup,v_user_id, now() - interval '30 days'),
-    (v_org_id,p26,l_main,'receipt',45,'PO-DVR-002',v_cctvsup,v_user_id, now() - interval '30 days'),
-    (v_org_id,p27,l_main,'receipt',25,'PO-NVR-002',v_cctvsup,v_user_id, now() - interval '30 days');
+  -- ── Networking ───────────────────────────────────────────────
+  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by) VALUES
+    (v_org_id,p28,l_main,'receipt',28,'PO-NET-001',v_digimart,v_user_id),   -- TPL 24P GbE  ×28=₹1.54L
+    (v_org_id,p29,l_main,'receipt',40,'PO-NET-001',v_digimart,v_user_id),   -- TPL 8P POE+  ×40=₹1.52L
+    (v_org_id,p30,l_main,'receipt',20,'PO-NET-001',v_digimart,v_user_id),   -- TPL 24P POE+ ×20=₹1.70L
+    (v_org_id,p31,l_main,'receipt',15,'PO-NET-002',v_techsup,v_user_id),    -- Cisco SF110  ×15=₹1.88L
+    (v_org_id,p32,l_main,'receipt',5, 'PO-NET-002',v_techsup,v_user_id),    -- Cisco SG350P ×5 =₹1.90L
+    (v_org_id,p33,l_main,'receipt',45,'PO-NET-001',v_digimart,v_user_id),   -- TPL Router   ×45=₹1.08L
+    (v_org_id,p34,l_main,'receipt',30,'PO-NET-001',v_digimart,v_user_id);   -- TPL EAP225   ×30=₹0.96L
 
-  -- Networking (p28 low stock, p31 out of stock, p32 dead)
-  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by,created_at) VALUES
-    (v_org_id,p28,l_main,'receipt',28,'PO-NET-001',v_digimart,v_user_id, now() - interval '30 days'),
-    (v_org_id,p29,l_main,'receipt',40,'PO-NET-001',v_digimart,v_user_id, now() - interval '30 days'),
-    (v_org_id,p30,l_main,'receipt',20,'PO-NET-001',v_digimart,v_user_id, now() - interval '30 days'),
-    (v_org_id,p31,l_main,'receipt',15,'PO-NET-002',v_techsup, v_user_id, now() - interval '30 days'),
-    (v_org_id,p33,l_main,'receipt',45,'PO-NET-001',v_digimart,v_user_id, now() - interval '30 days'),
-    (v_org_id,p34,l_main,'receipt',30,'PO-NET-001',v_digimart,v_user_id, now() - interval '30 days');
+  -- ── Storage ──────────────────────────────────────────────────
+  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by) VALUES
+    (v_org_id,p35,l_main,'receipt',85,'PO-STR-001',v_digimart,v_user_id),   -- WD 1TB  ×85=₹2.38L
+    (v_org_id,p36,l_main,'receipt',65,'PO-STR-001',v_digimart,v_user_id),   -- WD 2TB  ×65=₹2.93L
+    (v_org_id,p37,l_main,'receipt',45,'PO-STR-001',v_digimart,v_user_id),   -- WD 4TB  ×45=₹3.83L
+    (v_org_id,p38,l_main,'receipt',75,'PO-STR-002',v_digimart,v_user_id),   -- Sea 1TB ×75=₹1.95L
+    (v_org_id,p39,l_main,'receipt',40,'PO-STR-002',v_digimart,v_user_id),   -- Sea 4TB ×40=₹3.12L
+    (v_org_id,p40,l_main,'receipt',40,'PO-STR-003',v_techsup,v_user_id);    -- Sam SSD ×40=₹1.68L
 
-  -- Storage (p37 low stock, p40 low stock)
-  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by,created_at) VALUES
-    (v_org_id,p35,l_main,'receipt',85,'PO-STR-001',v_digimart,v_user_id, now() - interval '30 days'),
-    (v_org_id,p36,l_main,'receipt',65,'PO-STR-001',v_digimart,v_user_id, now() - interval '30 days'),
-    (v_org_id,p37,l_main,'receipt',45,'PO-STR-001',v_digimart,v_user_id, now() - interval '30 days'),
-    (v_org_id,p38,l_main,'receipt',75,'PO-STR-002',v_digimart,v_user_id, now() - interval '30 days'),
-    (v_org_id,p39,l_main,'receipt',40,'PO-STR-002',v_digimart,v_user_id, now() - interval '30 days'),
-    (v_org_id,p40,l_main,'receipt',40,'PO-STR-003',v_techsup, v_user_id, now() - interval '30 days');
+  -- ── Accessories ──────────────────────────────────────────────
+  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by) VALUES
+    (v_org_id,p41,l_main,'receipt',80,'PO-ACC-001',v_digimart,v_user_id),   -- Log Mouse  ×80=₹0.88L
+    (v_org_id,p42,l_main,'receipt',60,'PO-ACC-001',v_digimart,v_user_id),   -- Log KB+M   ×60=₹0.81L
+    (v_org_id,p43,l_main,'receipt',30,'PO-ACC-002',v_techsup,v_user_id),    -- APC 650VA  ×30=₹1.26L
+    (v_org_id,p44,l_main,'receipt',15,'PO-ACC-002',v_techsup,v_user_id),    -- APC 1KVA   ×15=₹1.43L
+    (v_org_id,p45,l_main,'receipt',22,'PO-ACC-003',v_digimart,v_user_id),   -- Cat6 Box   ×22=₹1.43L
+    (v_org_id,p46,l_main,'receipt',200,'PO-ACC-003',v_digimart,v_user_id);  -- HDMI 5m    ×200=₹0.36L
 
-  -- Accessories (p43 low stock, p44 dead)
-  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by,created_at) VALUES
-    (v_org_id,p41,l_main,'receipt',80, 'PO-ACC-001',v_digimart,v_user_id, now() - interval '30 days'),
-    (v_org_id,p42,l_main,'receipt',60, 'PO-ACC-001',v_digimart,v_user_id, now() - interval '30 days'),
-    (v_org_id,p43,l_main,'receipt',30, 'PO-ACC-002',v_techsup, v_user_id, now() - interval '30 days'),
-    (v_org_id,p46,l_main,'receipt',200,'PO-ACC-003',v_digimart,v_user_id, now() - interval '30 days');
+  -- ── Printers ─────────────────────────────────────────────────
+  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by) VALUES
+    (v_org_id,p47,l_main,'receipt',10,'PO-PRN-001',v_techsup,v_user_id),    -- HP M111w   ×10=₹1.25L
+    (v_org_id,p48,l_main,'receipt',6, 'PO-PRN-001',v_techsup,v_user_id);   -- HP M404n   ×6 =₹1.44L
 
-  -- Printers (p47 out of stock)
-  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by,created_at) VALUES
-    (v_org_id,p47,l_main,'receipt',10,'PO-PRN-001',v_techsup, v_user_id, now() - interval '30 days'),
-    (v_org_id,p48,l_main,'receipt',6, 'PO-PRN-001',v_techsup, v_user_id, now() - interval '30 days');
-
-  -- Canon LBP6030 (30 days ago)
+  -- Canon LBP6030 and Epson L3250 (inserted without ID capture)
   WITH cp1 AS (
     INSERT INTO products (organization_id,sku,name,brand_id,category_id,unit,cost_price,selling_price,mrp,reorder_point,reorder_qty,warranty_months,hsn_code,is_active)
     VALUES (v_org_id,'PRN-CAN-LBP6030','Canon LBP6030 Laser Printer (Single Function)',b_canon,c_printers,'pcs',9500,11500,11999,3,5,12,'84433190',true)
     RETURNING id
   )
-  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by,created_at)
-  SELECT v_org_id,id,l_main,'receipt',8,'PO-PRN-002',v_digimart,v_user_id, now() - interval '30 days' FROM cp1;
+  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by)
+  SELECT v_org_id,id,l_main,'receipt',8,'PO-PRN-002',v_digimart,v_user_id FROM cp1;
 
-  -- Epson L3250 (30 days ago)
   WITH ep1 AS (
     INSERT INTO products (organization_id,sku,name,brand_id,category_id,unit,cost_price,selling_price,mrp,reorder_point,reorder_qty,warranty_months,hsn_code,is_active)
     VALUES (v_org_id,'PRN-EPS-L3250','Epson L3250 EcoTank WiFi MFP Ink Tank Printer',b_epson,c_printers,'pcs',11500,14000,14499,3,5,12,'84433190',true)
     RETURNING id
   )
-  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by,created_at)
-  SELECT v_org_id,id,l_main,'receipt',12,'PO-PRN-002',v_digimart,v_user_id, now() - interval '30 days' FROM ep1;
+  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,created_by)
+  SELECT v_org_id,id,l_main,'receipt',12,'PO-PRN-002',v_digimart,v_user_id FROM ep1;
 
   -- ════════════════════════════════════════════════════════════
-  -- INTERMEDIATE SALES (10–20 days ago — general business activity)
-  -- ════════════════════════════════════════════════════════════
-  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,notes,created_by,created_at) VALUES
-    (v_org_id,p01,l_main,'sale',2,'INV-00101','Dell Latitude 3420 — Sunshine Exports',       v_user_id, now() - interval '20 days'),
-    (v_org_id,p03,l_main,'sale',3,'INV-00102','Dell Inspiron — Green Valley School',           v_user_id, now() - interval '20 days'),
-    (v_org_id,p07,l_main,'sale',4,'INV-00103','Lenovo IdeaPad — Everest BPO Pvt Ltd',         v_user_id, now() - interval '18 days'),
-    (v_org_id,p11,l_main,'sale',20,'INV-00104','Hikvision 2MP — Bandra Site Installation',    v_user_id, now() - interval '18 days'),
-    (v_org_id,p13,l_main,'sale',25,'INV-00105','Analog Cameras — Colaba Project Phase 1',     v_user_id, now() - interval '15 days'),
-    (v_org_id,p17,l_main,'sale',30,'INV-00106','Dahua Analog — Thane Residential Complex',    v_user_id, now() - interval '15 days'),
-    (v_org_id,p20,l_main,'sale',5,'INV-00107','Hik 4CH DVR — Bandra Residential',             v_user_id, now() - interval '12 days'),
-    (v_org_id,p23,l_main,'sale',8,'INV-00108','Hik 4CH NVR — Corporate Office Setup',         v_user_id, now() - interval '12 days'),
-    (v_org_id,p26,l_main,'sale',10,'INV-00109','Dahua DVR — Andheri Housing Society',          v_user_id, now() - interval '10 days'),
-    (v_org_id,p27,l_main,'sale',5,'INV-00110','Dahua NVR — Malad Office Complex',              v_user_id, now() - interval '10 days'),
-    (v_org_id,p29,l_main,'sale',10,'INV-00111','TP-Link POE Switch — LAN Setup Borivali',      v_user_id, now() - interval '8 days'),
-    (v_org_id,p33,l_main,'sale',12,'INV-00112','TP-Link Router — Residential Bulk Order',      v_user_id, now() - interval '8 days'),
-    (v_org_id,p35,l_main,'sale',20,'INV-00113','WD 1TB — CCTV Install Phase 1',                v_user_id, now() - interval '6 days'),
-    (v_org_id,p38,l_main,'sale',15,'INV-00114','Seagate 1TB — DVR HDD Supply',                 v_user_id, now() - interval '6 days'),
-    (v_org_id,p41,l_main,'sale',20,'INV-00115','Logitech Mouse — Vikram Associates',           v_user_id, now() - interval '5 days'),
-    (v_org_id,p42,l_main,'sale',15,'INV-00116','Logitech Combo — Bulk Corporate',              v_user_id, now() - interval '5 days'),
-    (v_org_id,p48,l_main,'sale',2,'INV-00117','HP LaserJet M404n — Nair Consultancy',          v_user_id, now() - interval '4 days');
-
-  -- ════════════════════════════════════════════════════════════
-  -- LOW STOCK SALES (14 days ago — brings these below reorder)
-  -- After: p05→1 (reorder=2), p06→2 (reorder=3), p21→5 (reorder=8),
-  --        p24→3 (reorder=5), p28→6 (reorder=8), p37→7 (reorder=10),
-  --        p40→4 (reorder=12), p43→5 (reorder=8)
-  -- ════════════════════════════════════════════════════════════
-  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,notes,created_by,created_at) VALUES
-    (v_org_id,p05,l_main,'sale',4,'INV-00201','HP EliteBook 840 — Mehta & Associates (bulk)',         v_user_id, now() - interval '14 days'),
-    (v_org_id,p06,l_main,'sale',8,'INV-00202','Lenovo ThinkPad E14 — Sharma Tech Park',               v_user_id, now() - interval '14 days'),
-    (v_org_id,p21,l_main,'sale',35,'INV-00203','Hik 8CH DVR — Chandivali Housing Project',            v_user_id, now() - interval '14 days'),
-    (v_org_id,p24,l_main,'sale',25,'INV-00204','Hik 8CH NVR — Hiranandani Business Park',             v_user_id, now() - interval '14 days'),
-    (v_org_id,p28,l_main,'sale',22,'INV-00205','TP-Link 24P Switch — Powai IT Park Cabling',          v_user_id, now() - interval '14 days'),
-    (v_org_id,p37,l_main,'sale',38,'INV-00206','WD 4TB Purple — NVR HDD Bundle Supply',               v_user_id, now() - interval '14 days'),
-    (v_org_id,p40,l_main,'sale',36,'INV-00207','Samsung SSD — Server Upgrade Project',                v_user_id, now() - interval '14 days'),
-    (v_org_id,p43,l_main,'sale',25,'INV-00208','APC 650VA UPS — Dharavi Electronics Bazaar',          v_user_id, now() - interval '14 days');
-
-  -- ════════════════════════════════════════════════════════════
-  -- OUT OF STOCK SALES (7 days ago — completely empties these)
-  -- After: p14→0, p31→0, p47→0
-  -- ════════════════════════════════════════════════════════════
-  INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,notes,created_by,created_at) VALUES
-    (v_org_id,p14,l_main,'sale',40,'INV-00301','Hik 8MP IP Dome — Navi Mumbai Data Centre CCTV',  v_user_id, now() - interval '7 days'),
-    (v_org_id,p31,l_main,'sale',15,'INV-00302','Cisco SF110 — BKC Corporate Office LAN',           v_user_id, now() - interval '7 days'),
-    (v_org_id,p47,l_main,'sale',10,'INV-00303','HP LaserJet M111w — Ghatkopar School Network',     v_user_id, now() - interval '7 days');
-
-  -- ════════════════════════════════════════════════════════════
-  -- TODAY'S SALES (live stock-out KPI)
+  -- RECENT SALES (creates today's stock-out KPI values)
   -- ════════════════════════════════════════════════════════════
   INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,notes,created_by) VALUES
-    (v_org_id,p01,l_main,'sale',2,'INV-2025-001','Dell Latitude 3420 — Rajesh Enterprises',      v_user_id),
-    (v_org_id,p03,l_main,'sale',3,'INV-2025-002','Dell Inspiron — ABC School Bulk Order',         v_user_id),
-    (v_org_id,p11,l_main,'sale',20,'INV-2025-003','Hikvision 2MP IP — Bandra Site Install',       v_user_id),
-    (v_org_id,p13,l_main,'sale',30,'INV-2025-004','Analog Cameras — Colaba Project Phase 2',      v_user_id),
-    (v_org_id,p20,l_main,'sale',5,'INV-2025-005','Hikvision 4CH DVR — Residential Complex',       v_user_id),
-    (v_org_id,p35,l_main,'sale',15,'INV-2025-006','WD Purple 1TB — CCTV Installation',            v_user_id),
-    (v_org_id,p29,l_main,'sale',8,'INV-2025-007','TP-Link POE Switch — Office Network Upgrade',   v_user_id),
-    (v_org_id,p41,l_main,'sale',25,'INV-2025-008','Logitech Mice — Bulk Corporate Order',         v_user_id);
+    (v_org_id,p01,l_main,'sale',2,'INV-2025-001','Dell Latitude 3420 — Rajesh Enterprises',v_user_id),
+    (v_org_id,p03,l_main,'sale',3,'INV-2025-002','Dell Inspiron — ABC School Bulk Order',v_user_id),
+    (v_org_id,p11,l_main,'sale',20,'INV-2025-003','Hikvision 2MP IP Cams — Site Install Bandra',v_user_id),
+    (v_org_id,p13,l_main,'sale',30,'INV-2025-004','Analog Cameras — Colaba Project',v_user_id),
+    (v_org_id,p20,l_main,'sale',5,'INV-2025-005','Hikvision 4CH DVR — Residential Complex',v_user_id),
+    (v_org_id,p35,l_main,'sale',15,'INV-2025-006','WD Purple 1TB — CCTV Installation',v_user_id),
+    (v_org_id,p28,l_main,'sale',8,'INV-2025-007','TP-Link 24P Switch — Office Network Upgrade',v_user_id),
+    (v_org_id,p41,l_main,'sale',25,'INV-2025-008','Logitech Mice — Bulk Corporate Order',v_user_id);
 
-  -- ════════════════════════════════════════════════════════════
-  -- TODAY'S RECEIPTS (live stock-in KPI)
-  -- ════════════════════════════════════════════════════════════
+  -- TODAY'S RECEIPTS (creates today's stock-in KPI values)
   INSERT INTO stock_movements (organization_id,product_id,location_id,movement_type,quantity,reference_no,vendor_id,notes,created_by) VALUES
-    (v_org_id,p12,l_main,'receipt',25,'PO-TODAY-001',v_cctvsup,'Restocking Hikvision ColorVu 4MP',   v_user_id),
-    (v_org_id,p15,l_main,'receipt',30,'PO-TODAY-002',v_cctvsup,'Dahua IP Dome Restock',               v_user_id),
-    (v_org_id,p36,l_main,'receipt',20,'PO-TODAY-003',v_digimart,'WD Purple 2TB Restock',              v_user_id),
-    (v_org_id,p04,l_main,'receipt',3, 'PO-TODAY-004',v_digimart,'HP ProBook Restock for corporate',   v_user_id);
+    (v_org_id,p12,l_main,'receipt',25,'PO-TODAY-001',v_cctvsup,'Restocking Hikvision ColorVu',v_user_id),
+    (v_org_id,p15,l_main,'receipt',30,'PO-TODAY-002',v_cctvsup,'Dahua IP Dome Restock',v_user_id),
+    (v_org_id,p36,l_main,'receipt',20,'PO-TODAY-003',v_digimart,'WD Purple 2TB Restock',v_user_id),
+    (v_org_id,p04,l_main,'receipt',3, 'PO-TODAY-004',v_digimart,'HP ProBook Restock',v_user_id);
 
   -- ════════════════════════════════════════════════════════════
   -- PRICE HISTORY
@@ -488,10 +441,6 @@ BEGIN
     (p35,3200,3400,2600,2800,'WD surveillance HDD revision',v_user_id),
     (p31,14000,15000,11500,12500,'Cisco distributor pricing update',v_user_id);
 
-  RAISE NOTICE 'Enterprise seed v2 completed for org: %', v_org_id;
-  RAISE NOTICE 'Dead stock: p22/p25/p32/p44/p45 (120-day-old receipts, no activity)';
-  RAISE NOTICE 'Out of stock: p14 (Hik 8MP IP), p31 (Cisco SF110), p47 (HP M111w)';
-  RAISE NOTICE 'Low stock: p05 p06 p21 p24 p28 p37 p40 p43';
+  RAISE NOTICE 'Enterprise seed completed successfully for org: %', v_org_id;
 
-END;
-$$;
+END $$;

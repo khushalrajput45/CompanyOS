@@ -34,7 +34,6 @@ function RegisterPageContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   function setField(field: keyof FormState, value: string) {
@@ -63,68 +62,42 @@ function RegisterPageContent() {
     }
 
     setSubmitting(true);
-    const supabase = createClient();
 
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email: form.email,
-      password: form.password,
-      options: {
-        data: {
-          company_name: form.companyName.trim(),
-          full_name: form.ownerName.trim(),
-        },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+    // Step 1: Create user + org + profile via server API
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        company_name: form.companyName.trim(),
+        full_name: form.ownerName.trim(),
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
+      }),
     });
 
-    if (signUpError) {
-      setError(signUpError.message);
+    const result = await res.json();
+
+    if (!res.ok) {
+      setError(result.error ?? "Something went wrong. Please try again.");
       setSubmitting(false);
       return;
     }
 
-    // If email confirmation is disabled, session is created immediately
-    if (signUpData.session) {
-      window.location.href = "/setup";
+    // Step 2: Sign in immediately
+    const supabase = createClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: form.email.trim().toLowerCase(),
+      password: form.password,
+    });
+
+    if (signInError) {
+      setError("Account created. Please sign in.");
+      window.location.href = "/login";
       return;
     }
 
-    setRegisteredEmail(form.email);
-    setSubmitting(false);
-  }
-
-  if (registeredEmail) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center space-y-3">
-            <div className="flex justify-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
-                <Building2 className="h-7 w-7 text-green-600" />
-              </div>
-            </div>
-            <CardTitle className="text-xl">Check your email</CardTitle>
-            <CardDescription>
-              We sent a verification link to{" "}
-              <strong className="text-foreground">{registeredEmail}</strong>.
-              Click it to activate your account.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-lg bg-muted p-4 text-sm space-y-1.5">
-              <p className="font-medium text-foreground">What happens next?</p>
-              <p className="text-muted-foreground">1. Open the email from CompanyOS</p>
-              <p className="text-muted-foreground">2. Click &ldquo;Confirm your email&rdquo;</p>
-              <p className="text-muted-foreground">3. Complete the quick setup wizard</p>
-              <p className="text-muted-foreground">4. Start using your ERP</p>
-            </div>
-            <Button asChild variant="outline" className="w-full">
-              <Link href="/login">Back to Sign In</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    // Step 3: Go to dashboard
+    window.location.href = "/dashboard";
   }
 
   return (
@@ -190,11 +163,7 @@ function RegisterPageContent() {
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
@@ -216,11 +185,7 @@ function RegisterPageContent() {
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
                 >
-                  {showConfirm ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
+                  {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>

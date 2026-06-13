@@ -46,7 +46,14 @@ function LoginPageContent() {
     });
 
     if (error) {
-      setError(error.message);
+      const msg = error.message.toLowerCase();
+      if (msg.includes("invalid login") || msg.includes("invalid credentials") || msg.includes("email not confirmed")) {
+        setError("Incorrect email or password. Please try again.");
+      } else if (msg.includes("too many requests")) {
+        setError("Too many attempts. Please wait a few minutes and try again.");
+      } else {
+        setError("Unable to sign in. Please check your email and password.");
+      }
       return;
     }
 

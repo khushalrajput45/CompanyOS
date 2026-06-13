@@ -52,8 +52,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Check is_disabled for authenticated users on protected routes
-  if (user && !isPublicRoute) {
+  // Check profile for authenticated users on protected routes
+  if (user && !isPublicRoute && !pathname.startsWith("/setup") && !pathname.startsWith("/api/")) {
     try {
       const { data: profile, error: profileErr } = await supabase
         .from("profiles")
@@ -61,25 +61,24 @@ export async function proxy(request: NextRequest) {
         .eq("id", user.id)
         .single();
 
-      if (profileErr || profile?.is_disabled) {
+      if (profile?.is_disabled) {
         await supabase.auth.signOut();
         const url = request.nextUrl.clone();
         url.pathname = "/login";
-        url.searchParams.set(
-          "error",
-          profile?.is_disabled
-            ? "Your account has been disabled. Contact your administrator."
-            : "Unable to verify your account. Please sign in again."
-        );
+        url.searchParams.set("error", "Your account has been disabled. Contact your administrator.");
+        return NextResponse.redirect(url);
+      }
+
+      // Profile not found — account setup may still be in progress, sign out cleanly
+      if (profileErr && profileErr.code === "PGRST116") {
+        await supabase.auth.signOut();
+        const url = request.nextUrl.clone();
+        url.pathname = "/login";
+        url.searchParams.set("error", "Account setup is not complete. Please register again.");
         return NextResponse.redirect(url);
       }
     } catch {
-      // On unexpected error, sign out and require re-auth (fail closed)
-      await supabase.auth.signOut();
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      url.searchParams.set("error", "Session verification failed. Please sign in again.");
-      return NextResponse.redirect(url);
+      // Network or unexpected error — don't sign out, just proceed
     }
   }
 

@@ -125,8 +125,10 @@ CREATE TRIGGER invoice_payments_sync
 
 
 -- ── 5. Helper: increment_stock_level ─────────────────────────────────────────
--- Safe atomic stock adjustment. p_delta > 0 adds stock (restore), < 0 removes
--- stock (deduct), always floored at 0 to prevent negative quantities.
+-- Used by the application to safely restore or adjust stock without a race
+-- condition when the client cannot do atomic arithmetic via the REST API.
+-- p_delta > 0 → add stock (restore)
+-- p_delta < 0 → remove stock (deduct, floored at 0)
 
 CREATE OR REPLACE FUNCTION increment_stock_level(
   p_product_id  UUID,
@@ -142,42 +144,3 @@ BEGIN
 END;
 $$;
 
-
--- ── 6. Fix apply_stock_movement: floor stock at 0 on first-ever sale ──────────
--- The original trigger uses VALUES (..., -new.quantity) for outbound movements.
--- When no prior stock_level row exists (product never received at that location),
--- this inserts a NEGATIVE quantity. The ON CONFLICT path correctly uses GREATEST
--- but the INSERT path does not. Fix: use GREATEST(0, -new.quantity) = 0 so the
--- first outbound movement at a location never creates negative stock.
-
-CREATE OR REPLACE FUNCTION apply_stock_movement()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
-BEGIN
-  IF new.movement_type IN ('receipt', 'transfer_in', 'return', 'adjustment') THEN
-    INSERT INTO stock_levels (product_id, location_id, quantity)
-    VALUES (new.product_id, new.location_id, new.quantity)
-    ON CONFLICT (product_id, location_id) DO UPDATE
-      SET quantity   = stock_levels.quantity + new.quantity,
-          updated_at = now();
-  ELSIF new.movement_type IN ('sale', 'transfer_out', 'damage') THEN
-    INSERT INTO stock_levels (product_id, location_id, quantity)
-    VALUES (new.product_id, new.location_id, GREATEST(0, -new.quantity))
-    ON CONFLICT (product_id, location_id) DO UPDATE
-      SET quantity   = GREATEST(0, stock_levels.quantity - new.quantity),
-          updated_at = now();
-  END IF;
-  RETURN new;
-END;
-$$;
-
-
--- ── 7. RLS policies for counter tables ───────────────────────────────────────
--- Both quotation_counters (migration 006) and invoice_counters (migration 008)
--- had RLS enabled but no policy added. The trigger functions are SECURITY
--- DEFINER so they bypass RLS, but adding explicit policies removes the risk.
-
-CREATE POLICY "org access: invoice_counters" ON invoice_counters
-  FOR ALL USING (organization_id = auth_org_id());
-
-CREATE POLICY "org access: quotation_counters" ON quotation_counters
-  FOR ALL USING (organization_id = auth_org_id());
