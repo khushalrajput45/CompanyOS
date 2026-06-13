@@ -62,41 +62,69 @@ function RegisterPageContent() {
     }
 
     setSubmitting(true);
+    const supabase = createClient();
+    const emailNormalized = form.email.trim().toLowerCase();
 
-    // Step 1: Create user + org + profile via server API
+    // Step 1: Create auth user (email confirmation is disabled in Supabase settings)
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email: emailNormalized,
+      password: form.password,
+      options: {
+        data: { full_name: form.ownerName.trim(), company_name: form.companyName.trim() },
+      },
+    });
+
+    if (signUpError) {
+      const msg = signUpError.message.toLowerCase();
+      if (msg.includes("already registered") || msg.includes("already been registered")) {
+        setError("This email already has an account. Please sign in.");
+      } else {
+        setError("Failed to create account. Please try again.");
+      }
+      setSubmitting(false);
+      return;
+    }
+
+    const userId = signUpData.user?.id;
+    if (!userId) {
+      setError("Failed to create account. Please try again.");
+      setSubmitting(false);
+      return;
+    }
+
+    // Step 2: Create org + profile via server API (uses service role key)
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        user_id: userId,
         company_name: form.companyName.trim(),
         full_name: form.ownerName.trim(),
-        email: form.email.trim().toLowerCase(),
-        password: form.password,
+        email: emailNormalized,
       }),
     });
 
     const result = await res.json();
 
     if (!res.ok) {
-      setError(result.error ?? "Something went wrong. Please try again.");
+      setError(result.error ?? "Account created but setup failed. Please contact support.");
       setSubmitting(false);
       return;
     }
 
-    // Step 2: Sign in immediately
-    const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: form.email.trim().toLowerCase(),
-      password: form.password,
-    });
-
-    if (signInError) {
-      setError("Account created. Please sign in.");
-      window.location.href = "/login";
-      return;
+    // Step 3: Sign in (needed if email confirmation was on and no session yet)
+    if (!signUpData.session) {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: emailNormalized,
+        password: form.password,
+      });
+      if (signInError) {
+        window.location.href = "/login";
+        return;
+      }
     }
 
-    // Step 3: Go to dashboard
+    // Step 4: Go to dashboard
     window.location.href = "/dashboard";
   }
 
