@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       .single();
 
     if (orgError) {
-      return NextResponse.json({ error: "Failed to create organization." }, { status: 500 });
+      return NextResponse.json({ error: "Failed to create organization.", detail: orgError.message, code: orgError.code }, { status: 500 });
     }
 
     // Create admin profile

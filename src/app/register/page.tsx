@@ -107,7 +107,7 @@ function RegisterPageContent() {
     const result = await res.json();
 
     if (!res.ok) {
-      setError(result.error ?? "Account created but setup failed. Please contact support.");
+      setError((result.error ?? "Setup failed.") + (result.detail ? ` (${result.detail})` : ""));
       setSubmitting(false);
       return;
     }
