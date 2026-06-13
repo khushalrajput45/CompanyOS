@@ -67,10 +67,11 @@ export async function POST(request: Request) {
     }
 
     // Create default company settings (non-critical)
-    await supabaseAdmin
-      .from("company_settings")
-      .insert({ organization_id: org.id, company_name: company_name.trim() })
-      .catch(() => {});
+    try {
+      await supabaseAdmin
+        .from("company_settings")
+        .insert({ organization_id: org.id, company_name: company_name.trim() });
+    } catch { /* ignore */ }
 
     return NextResponse.json({ success: true });
   } catch {
