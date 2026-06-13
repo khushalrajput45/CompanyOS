@@ -1212,7 +1212,7 @@ export default function DashboardPage() {
               ) : (
                 <div className="divide-y">
                   {activities.map(item => {
-                    const { icon: ActivityIcon, bg, color } = ACTIVITY_ICON_MAP[item.icon];
+                    const { icon: ActivityIcon, bg, color } = ACTIVITY_ICON_MAP[item.icon] ?? ACTIVITY_ICON_MAP["invoice"];
                     const timeStr = (() => {
                       const d = new Date(item.time);
                       const diff = Date.now() - d.getTime();

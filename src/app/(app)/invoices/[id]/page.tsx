@@ -148,7 +148,7 @@ function buildPrintHTML(inv: InvoiceFull, settings: CompanySettings | null): str
 
   const isPaid = inv.status === "paid";
   const amountPaid = inv.amount_paid ?? 0;
-  const balance    = inv.total_amount - amountPaid;
+  const balance    = Math.max(0, inv.total_amount - amountPaid);
 
   return `<!DOCTYPE html>
 <html lang="en">

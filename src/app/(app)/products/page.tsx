@@ -243,7 +243,7 @@ function ProductsPageContent() {
         header: "Inventory Value",
         cell: ({ row }) => {
           const qty = stockByProduct.get(row.original.id) ?? 0;
-          const price = row.original.selling_price;
+          const price = row.original.selling_price ?? 0;
           const value = qty * price;
           return (
             <span className="text-sm font-medium">

@@ -162,10 +162,12 @@ export default function PurchaseOrdersPage() {
       {
         accessorKey: "expected_date",
         header: "Expected",
-        cell: ({ getValue }) =>
-          getValue()
-            ? format(new Date((getValue() as string) + "T00:00:00"), "dd MMM yyyy")
-            : <span className="text-muted-foreground">—</span>,
+        cell: ({ getValue }) => {
+          const v = getValue() as string | null;
+          if (!v) return <span className="text-muted-foreground">—</span>;
+          try { return format(new Date(v + "T00:00:00"), "dd MMM yyyy"); }
+          catch { return <span className="text-muted-foreground">—</span>; }
+        },
       },
       {
         accessorKey: "status",

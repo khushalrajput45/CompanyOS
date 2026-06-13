@@ -111,18 +111,21 @@ export function UserManagement() {
 
   const addUserMutation = useMutation({
     mutationFn: async (form: AddUserForm) => {
-      const supabase = createClient();
-      const { error } = await supabase.auth.resetPasswordForEmail(form.email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      const res = await fetch("/api/auth/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: form.email, full_name: form.full_name, role: form.role }),
       });
-      if (error) throw new Error(`Could not send invitation: ${error.message}`);
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error ?? "Failed to invite user.");
     },
     onSuccess: () => {
       setActionError(null);
-      setActionSuccess(`Invitation sent to ${addForm.email}. They must be added via the Supabase dashboard.`);
+      setActionSuccess(`User created and invitation sent to ${addForm.email}. They can now set their password via the reset link.`);
       setAddForm({ email: "", full_name: "", role: "employee" });
       setShowAddForm(false);
       setTimeout(() => setActionSuccess(null), 8000);
+      queryClient.invalidateQueries({ queryKey: ["org-users"] });
     },
     onError: (err: Error) => setActionError(err.message),
   });
@@ -147,10 +150,9 @@ export function UserManagement() {
       {/* Add user form */}
       {showAddForm && isAdmin && (
         <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-          <p className="text-sm font-medium">Invite New User</p>
+          <p className="text-sm font-medium">Add New Team Member</p>
           <p className="text-xs text-muted-foreground">
-            Note: New user accounts must be created in Supabase Auth. Use this form to send a password-reset email so they can set their password.
-            The user profile must exist in the database with the correct organization_id.
+            Creates an account and sends a password setup link to their email.
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="space-y-1">
