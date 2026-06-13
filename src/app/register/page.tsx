@@ -65,7 +65,7 @@ function RegisterPageContent() {
     setSubmitting(true);
     const supabase = createClient();
 
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
       options: {
@@ -80,6 +80,12 @@ function RegisterPageContent() {
     if (signUpError) {
       setError(signUpError.message);
       setSubmitting(false);
+      return;
+    }
+
+    // If email confirmation is disabled, session is created immediately
+    if (signUpData.session) {
+      window.location.href = "/setup";
       return;
     }
 
