@@ -92,22 +92,16 @@ function RegisterPageContent() {
       return;
     }
 
-    // Step 2: Create org + profile via server API (uses service role key)
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: userId,
-        company_name: form.companyName.trim(),
-        full_name: form.ownerName.trim(),
-        email: emailNormalized,
-      }),
+    // Step 2: Create org + profile via database function
+    const { data: rpcData, error: rpcError } = await supabase.rpc("create_org_and_profile", {
+      p_user_id: userId,
+      p_company: form.companyName.trim(),
+      p_full_name: form.ownerName.trim(),
+      p_email: emailNormalized,
     });
 
-    const result = await res.json();
-
-    if (!res.ok) {
-      setError((result.error ?? "Setup failed.") + (result.detail ? ` (${result.detail})` : ""));
+    if (rpcError || (rpcData as { success?: boolean })?.success === false) {
+      setError("Failed to set up your organization. Please try again.");
       setSubmitting(false);
       return;
     }
