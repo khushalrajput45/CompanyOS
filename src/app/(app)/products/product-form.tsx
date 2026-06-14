@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { logAudit } from "@/lib/utils/logAudit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -126,6 +127,7 @@ export function ProductForm({ product, onSuccess }: Props) {
         .update(payload)
         .eq("id", product.id);
       if (error) { setSubmitError(error.message); return; }
+      logAudit({ action: "updated", module: "products", record_id: product.id, record_name: values.name });
 
       const sellingChanged = values.selling_price !== product.selling_price;
       const costChanged = (values.cost_price ?? null) !== product.cost_price;
@@ -147,7 +149,7 @@ export function ProductForm({ product, onSuccess }: Props) {
         }
       }
     } else {
-      const { error } = await supabase.from("products").insert(payload);
+      const { data: inserted, error } = await supabase.from("products").insert(payload).select("id").single();
       if (error) {
         setSubmitError(
           error.message.includes("unique")
@@ -156,6 +158,7 @@ export function ProductForm({ product, onSuccess }: Props) {
         );
         return;
       }
+      logAudit({ action: "created", module: "products", record_id: inserted?.id, record_name: values.name });
     }
     onSuccess();
   }

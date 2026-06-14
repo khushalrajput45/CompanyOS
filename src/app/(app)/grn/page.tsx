@@ -94,7 +94,7 @@ const columns: ColumnDef<GRNRow>[] = [
     header: "Receipt Date",
     cell: ({ row }) => (
       <span className="text-sm text-muted-foreground">
-        {format(new Date(row.original.receipt_date + "T00:00:00"), "dd MMM yyyy")}
+        {row.original.receipt_date ? format(new Date(row.original.receipt_date + "T00:00:00"), "dd MMM yyyy") : "—"}
       </span>
     ),
   },
@@ -126,7 +126,6 @@ export default function GRNListPage() {
   const { data = [], isLoading } = useQuery({
     queryKey: ["grn-list"],
     queryFn: fetchGRNs,
-    staleTime: 30000,
   });
 
   const table = useReactTable({
@@ -187,7 +186,7 @@ export default function GRNListPage() {
               </p>
             </div>
           ) : (
-            <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+            <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
               <Table>
                 <TableHeader>
                   {table.getHeaderGroups().map(hg => (

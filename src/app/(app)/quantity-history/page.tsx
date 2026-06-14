@@ -67,20 +67,18 @@ export default function QuantityHistoryPage() {
         .order("name");
       return data ?? [];
     },
-    staleTime: 30000,
   });
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["quantity-history", selectedProduct],
     queryFn: () => fetchMovementLedger(selectedProduct === "all" ? undefined : selectedProduct),
-    staleTime: 30000,
   });
 
   const columns: ColumnDef<StockMovement>[] = [
     {
       accessorKey: "created_at",
       header: "Date",
-      cell: ({ getValue }) => format(new Date(getValue() as string), "dd MMM yyyy HH:mm"),
+      cell: ({ getValue }) => { const v = getValue() as string | null; return v ? format(new Date(v), "dd MMM yyyy HH:mm") : "—"; },
     },
     { accessorFn: (r) => r.product?.sku, header: "SKU" },
     { accessorFn: (r) => r.product?.name, header: "Product" },
@@ -179,7 +177,7 @@ export default function QuantityHistoryPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+        <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((hg) => (

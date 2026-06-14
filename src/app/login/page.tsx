@@ -40,7 +40,7 @@ function LoginPageContent() {
   async function onSubmit(values: LoginForm) {
     setError(null);
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: signInData, error } = await supabase.auth.signInWithPassword({
       email: values.email,
       password: values.password,
     });
@@ -55,6 +55,35 @@ function LoginPageContent() {
         setError("Unable to sign in. Please check your email and password.");
       }
       return;
+    }
+
+    // Check disabled status and record last_login_at
+    if (signInData.user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("is_disabled")
+        .eq("id", signInData.user.id)
+        .single();
+
+      if (profile?.is_disabled) {
+        await supabase.auth.signOut();
+        setError("Your account has been disabled. Please contact your administrator.");
+        return;
+      }
+
+      // Record login time (best-effort, non-blocking)
+      supabase
+        .from("profiles")
+        .update({ last_login_at: new Date().toISOString() })
+        .eq("id", signInData.user.id)
+        .then(() => {});
+
+      // Audit log (fire-and-forget via server endpoint)
+      fetch("/api/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "login", module: "authentication" }),
+      }).catch(() => {});
     }
 
     router.push("/dashboard");

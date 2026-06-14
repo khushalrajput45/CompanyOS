@@ -125,7 +125,7 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+    <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
       <div className="px-5 py-3 border-b bg-muted/30">
         <h2 className="text-sm font-semibold">{title}</h2>
       </div>
@@ -143,14 +143,12 @@ export default function CustomerDetailPage() {
   const { data: customer, isLoading, error } = useQuery({
     queryKey: ["customer", id],
     queryFn:  () => fetchCustomer(id),
-    staleTime: 30000,
     retry: 1,
   });
 
   const { data: ledger, isLoading: ledgerLoading } = useQuery({
     queryKey: ["customer-ledger", id],
     queryFn:  () => fetchCustomerLedger(id),
-    staleTime: 30000,
     enabled:  !!id,
   });
 
@@ -159,7 +157,7 @@ export default function CustomerDetailPage() {
     return (
       <div className="flex flex-col h-full">
         <Header title="Customer" breadcrumbs={[{ label: "Customers", href: "/customers" }, { label: "Loading…" }]} />
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 max-w-5xl mx-auto w-full">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 max-w-5xl mx-auto w-full">
           <div className="grid grid-cols-3 gap-4">
             {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 rounded-lg" />)}
           </div>
@@ -281,7 +279,7 @@ export default function CustomerDetailPage() {
           )}
 
           {/* ── Invoice history ──────────────────────────────── */}
-          <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+          <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
             <div className="px-5 py-3 border-b bg-muted/30 flex items-center justify-between">
               <h2 className="text-sm font-semibold flex items-center gap-2">
                 <Receipt className="h-4 w-4 text-muted-foreground" />
@@ -366,7 +364,7 @@ export default function CustomerDetailPage() {
           </div>
 
           {/* ── Payment history ──────────────────────────────── */}
-          <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+          <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
             <div className="px-5 py-3 border-b bg-muted/30">
               <h2 className="text-sm font-semibold flex items-center gap-2">
                 <Banknote className="h-4 w-4 text-muted-foreground" />

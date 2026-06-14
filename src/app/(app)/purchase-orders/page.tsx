@@ -95,7 +95,7 @@ export default function PurchaseOrdersPage() {
   const router      = useRouter();
   const queryClient = useQueryClient();
   const { data: profile } = useProfile();
-  const isAdmin = profile?.role === "admin" || profile?.role === "manager";
+  const isAdmin = ["owner","admin","manager"].includes(profile?.role ?? "");
 
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -105,7 +105,6 @@ export default function PurchaseOrdersPage() {
   const { data: pos = [], isLoading, error } = useQuery({
     queryKey: ["purchase-orders"],
     queryFn: fetchPOs,
-    staleTime: 30000,
     retry: 1,
   });
 
@@ -156,8 +155,7 @@ export default function PurchaseOrdersPage() {
       {
         accessorKey: "po_date",
         header: "PO Date",
-        cell: ({ getValue }) =>
-          format(new Date((getValue() as string) + "T00:00:00"), "dd MMM yyyy"),
+        cell: ({ getValue }) => { const v = getValue() as string | null; return v ? format(new Date(v + "T00:00:00"), "dd MMM yyyy") : "—"; },
       },
       {
         accessorKey: "expected_date",
@@ -266,10 +264,10 @@ export default function PurchaseOrdersPage() {
         }
       />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4">
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <div className="relative flex-1 min-w-[120px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search POs, vendor…"
@@ -279,7 +277,7 @@ export default function PurchaseOrdersPage() {
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-40 h-9">
+            <SelectTrigger className="w-32 h-9 sm:w-40">
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
             <SelectContent>
@@ -301,7 +299,7 @@ export default function PurchaseOrdersPage() {
         )}
 
         {/* Table */}
-        <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+        <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map(hg => (

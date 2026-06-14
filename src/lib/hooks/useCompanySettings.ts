@@ -16,6 +16,7 @@ export function useCompanySettings() {
       if (error) throw error;
       return data;
     },
-    staleTime: 300000,
+    staleTime: Infinity,
+    refetchOnMount: true,   // always fetch on first mount so sidebar is never stale
   });
 }

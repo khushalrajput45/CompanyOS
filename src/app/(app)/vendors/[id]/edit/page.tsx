@@ -29,7 +29,6 @@ export default function EditVendorPage() {
   const { data: vendor, isLoading, error } = useQuery({
     queryKey: ["vendor", id],
     queryFn: () => fetchVendor(id),
-    staleTime: 30000,
     retry: 1,
   });
 

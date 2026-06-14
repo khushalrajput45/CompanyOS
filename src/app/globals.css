@@ -30,7 +30,7 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
+  --color-popover: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
   --radius-sm: calc(var(--radius) * 0.6);
@@ -59,7 +59,6 @@
   --input: oklch(0.92 0.008 240);
   --ring: oklch(0.52 0.22 260);
   --radius: 0.5rem;
-  /* Sidebar — deep blue matching reference */
   --sidebar: oklch(0.28 0.1 260);
   --sidebar-foreground: oklch(0.92 0.02 260);
   --sidebar-primary: oklch(0.52 0.22 260);
@@ -76,5 +75,31 @@
   }
   body {
     @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+
+  /* Thin scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: oklch(0.80 0.01 240); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: oklch(0.65 0.02 240); }
+  * { scrollbar-width: thin; scrollbar-color: oklch(0.80 0.01 240) transparent; }
+}
+
+/* Shimmer for loading skeletons */
+@keyframes shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    oklch(0.92 0.005 240) 25%,
+    oklch(0.96 0.003 240) 50%,
+    oklch(0.92 0.005 240) 75%
+  );
+  background-size: 1200px 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
 }

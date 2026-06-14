@@ -49,7 +49,8 @@ export async function POST(request: Request) {
       id: user_id,
       organization_id: org.id,
       full_name: full_name.trim(),
-      role: "admin",
+      role: "owner",
+      is_owner: true,
       email: email.trim().toLowerCase(),
     });
 

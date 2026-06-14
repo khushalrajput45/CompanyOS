@@ -60,7 +60,7 @@ export default function VendorsPage() {
   const router      = useRouter();
   const queryClient = useQueryClient();
   const { data: profile } = useProfile();
-  const isAdmin = profile?.role === "admin" || profile?.role === "manager";
+  const isAdmin = ["owner","admin","manager"].includes(profile?.role ?? "");
 
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -71,7 +71,6 @@ export default function VendorsPage() {
   const { data: vendors = [], isLoading, error } = useQuery({
     queryKey: ["vendors"],
     queryFn: fetchVendors,
-    staleTime: 30000,
     retry: 1,
   });
 
@@ -289,10 +288,10 @@ export default function VendorsPage() {
         }
       />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4">
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <div className="relative flex-1 min-w-[120px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search vendors..."
@@ -303,7 +302,7 @@ export default function VendorsPage() {
           </div>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-36 h-9">
+            <SelectTrigger className="w-28 h-9 sm:w-36">
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
             <SelectContent>
@@ -327,7 +326,7 @@ export default function VendorsPage() {
         )}
 
         {/* Table */}
-        <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+        <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((hg) => (

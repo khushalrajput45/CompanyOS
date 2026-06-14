@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "manager" | "employee";
+export type UserRole = "owner" | "admin" | "manager" | "employee" | "viewer";
 
 export interface Profile {
   id: string;
@@ -7,7 +7,27 @@ export interface Profile {
   role: UserRole;
   email: string;
   is_disabled: boolean;
+  is_owner: boolean;
+  last_login_at: string | null;
   created_at: string;
+}
+
+export interface Invitation {
+  id: string;
+  organization_id: string;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  token: string;
+  invited_by: string | null;
+  user_id: string | null;
+  expires_at: string;
+  accepted_at: string | null;
+  cancelled_at: string | null;
+  resent_at: string | null;
+  resent_count: number;
+  created_at: string;
+  inviter?: { full_name: string } | null;
 }
 
 export interface Organization {
@@ -336,32 +356,90 @@ export interface VendorPayment {
 export interface CompanySettings {
   id: string;
   organization_id: string;
+
+  // Business identity
   company_name: string | null;
   legal_business_name: string | null;
+  business_type: string | null;
   gst_number: string | null;
   pan_number: string | null;
+  cin_number: string | null;
+  msme_registration: string | null;
+
+  // Contact
   phone: string | null;
+  alternate_phone: string | null;
   email: string | null;
+  support_email: string | null;
   website: string | null;
+
+  // Address
   address_line_1: string | null;
   address_line_2: string | null;
   city: string | null;
   state: string | null;
   country: string;
   pincode: string | null;
+
+  // Banking
   bank_name: string | null;
   account_holder_name: string | null;
   account_number: string | null;
   ifsc_code: string | null;
   branch_name: string | null;
   upi_id: string | null;
+
+  // Financial defaults
+  default_currency: string;
+  default_tax_rate: number;
+  financial_year_start: number;
+
+  // Branding
   logo_url: string | null;
+  signature_url: string | null;
+
+  // Document numbering
   invoice_prefix: string;
   quotation_prefix: string;
   purchase_order_prefix: string;
   grn_prefix: string;
+  vendor_payment_prefix: string;
+
+  // Tax compliance
+  tan_number: string | null;
+
+  // Document defaults
+  terms_and_conditions: string | null;
+  payment_terms: string | null;
+  default_notes: string | null;
+
   created_at: string;
   updated_at: string;
+}
+
+export interface ModulePermission {
+  id: string;
+  organization_id: string;
+  role: string;
+  module: string;
+  can_view: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+  can_approve: boolean;
+}
+
+export interface AdminEvent {
+  id: string;
+  organization_id: string;
+  actor_id: string | null;
+  actor_name: string;
+  event_type: string;
+  target_id: string | null;
+  target_name: string | null;
+  target_email: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
 }
 
 export interface DashboardKPIs {

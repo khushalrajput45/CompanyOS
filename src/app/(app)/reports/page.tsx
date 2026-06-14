@@ -209,7 +209,7 @@ function DataTable<T>({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+      <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
@@ -278,7 +278,7 @@ type ReportKey = "valuation" | "lowstock" | "dead" | "movement" | "fast" | "slow
 function ReportsPageContent() {
   const searchParams = useSearchParams();
   const { data: profile } = useProfile();
-  const isAdmin = profile?.role === "admin" || profile?.role === "manager";
+  const isAdmin = ["owner","admin","manager"].includes(profile?.role ?? "");
 
   // Initialize from URL param (dashboard drill-down)
   const [activeReport, setActiveReport] = useState<ReportKey | null>(
@@ -288,7 +288,6 @@ function ReportsPageContent() {
   const { data, isLoading } = useQuery({
     queryKey: ["reports"],
     queryFn: fetchReports,
-    staleTime: 60000,
     enabled: isAdmin,
   });
 
@@ -553,7 +552,7 @@ function ReportsPageContent() {
     <div className="flex flex-col h-full">
       <Header title="Reports" subtitle="Inventory analytics and export" />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-6">
         {/* Report cards grid — 3 cols on md, 6 on xl */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {reportCards.map(({ key, title, description, icon: Icon, iconBg, iconColor, count }) => (

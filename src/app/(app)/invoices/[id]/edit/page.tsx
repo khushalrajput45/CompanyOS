@@ -23,7 +23,7 @@ async function fetchInvoiceWithItems(id: string): Promise<Invoice> {
   return {
     ...d,
     items: (d.items ?? []).sort(
-      (a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order
+      (a: { sort_order: number | null }, b: { sort_order: number | null }) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
     ),
   };
 }
@@ -36,7 +36,6 @@ export default function EditInvoicePage() {
   const { data: invoice, isLoading, error } = useQuery({
     queryKey: ["invoice-edit", id],
     queryFn:  () => fetchInvoiceWithItems(id),
-    staleTime: 30000,
     retry: 1,
   });
 
@@ -54,7 +53,7 @@ export default function EditInvoicePage() {
           title="Edit Invoice"
           breadcrumbs={[{ label: "Invoices", href: "/invoices" }, { label: "Loading…" }]}
         />
-        <div className="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto w-full space-y-4">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-6 max-w-5xl mx-auto w-full space-y-4">
           <Skeleton className="h-40 rounded-lg" />
           <Skeleton className="h-64 rounded-lg" />
         </div>

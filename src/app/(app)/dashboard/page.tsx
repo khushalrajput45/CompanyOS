@@ -374,7 +374,7 @@ function SectionHead({ title, sub }: { title: string; sub?: string }) {
 export default function DashboardPage() {
   const router  = useRouter();
   const { data: profile } = useProfile();
-  const isAdmin = profile?.role === "admin" || profile?.role === "manager";
+  const isAdmin = ["owner","admin","manager"].includes(profile?.role ?? "");
 
   // Filters
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("current-month");
@@ -712,16 +712,16 @@ export default function DashboardPage() {
     <div className="flex flex-col h-full">
 
       {/* ── Custom Dashboard Header ──────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-b bg-card px-6 py-4 shrink-0 gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b bg-card px-3 sm:px-6 py-3 shrink-0 gap-2 sm:gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight truncate">Dashboard</h1>
+          <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
             {now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           <Select value={periodFilter} onValueChange={v => setPeriodFilter(v as PeriodFilter)}>
-            <SelectTrigger className="h-8 w-36 text-xs">
+            <SelectTrigger className="h-8 w-28 sm:w-36 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -731,7 +731,7 @@ export default function DashboardPage() {
             </SelectContent>
           </Select>
           <Select value={yearFilter} onValueChange={v => setYearFilter(v as YearFilter)}>
-            <SelectTrigger className="h-8 w-32 text-xs">
+            <SelectTrigger className="h-8 w-24 sm:w-32 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -745,14 +745,14 @@ export default function DashboardPage() {
               type="number"
               value={customYear}
               onChange={e => setCustomYear(e.target.value)}
-              className="h-8 w-20 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+              className="h-8 w-16 sm:w-20 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
               min={2020} max={2035}
             />
           )}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-background">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-8 bg-background">
 
         {/* ═══════════════════════════════════════════════════
             SECTION 1 — FINANCIAL OVERVIEW (YEARLY)
@@ -1065,7 +1065,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div className="space-y-3">
             <SectionHead title="Top Customers" sub="By sales · Last 6 months · Click to open ledger" />
-            <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+            <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
               {finLoading ? (
                 <div className="p-5 space-y-2">{[1,2,3,4,5].map(i => <div key={i} className="h-9 rounded bg-muted animate-pulse" />)}</div>
               ) : !isAdmin ? (
@@ -1100,7 +1100,7 @@ export default function DashboardPage() {
 
           <div className="space-y-3">
             <SectionHead title="Top Selling Products" sub="By revenue · From stock movements" />
-            <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+            <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
               {finLoading ? (
                 <div className="p-5 space-y-2">{[1,2,3,4,5].map(i => <div key={i} className="h-9 rounded bg-muted animate-pulse" />)}</div>
               ) : !isAdmin ? (
@@ -1140,7 +1140,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <div className="space-y-3">
             <SectionHead title="Top Pending Collections" sub="Highest outstanding customers" />
-            <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+            <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
               {finLoading ? (
                 <div className="p-5 space-y-2">{[1,2,3,4].map(i => <div key={i} className="h-10 rounded bg-muted animate-pulse" />)}</div>
               ) : !isAdmin ? (
@@ -1192,7 +1192,7 @@ export default function DashboardPage() {
 
           <div className="space-y-3">
             <SectionHead title="Recent Activity" sub="Latest 10 system events" />
-            <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+            <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
               {actLoading ? (
                 <div className="p-5 space-y-3">
                   {[1,2,3,4,5].map(i => (

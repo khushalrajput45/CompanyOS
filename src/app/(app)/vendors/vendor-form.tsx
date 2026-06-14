@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
+import { logAudit } from "@/lib/utils/logAudit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -115,6 +116,7 @@ export function VendorForm({ vendor, onSuccess, onCancel }: Props) {
         .update(payload)
         .eq("id", vendor.id);
       if (error) { setSubmitError(error.message); return; }
+      logAudit({ action: "updated", module: "vendors", record_id: vendor.id, record_name: values.name });
       onSuccess(vendor.id);
     } else {
       const { data, error } = await supabase
@@ -123,6 +125,7 @@ export function VendorForm({ vendor, onSuccess, onCancel }: Props) {
         .select("id")
         .single();
       if (error) { setSubmitError(error.message); return; }
+      logAudit({ action: "created", module: "vendors", record_id: data.id, record_name: values.name });
       onSuccess(data.id);
     }
   }

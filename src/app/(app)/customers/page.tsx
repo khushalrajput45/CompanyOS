@@ -58,7 +58,6 @@ export default function CustomersPage() {
   const { data: customers = [], isLoading, error } = useQuery({
     queryKey: ["customers"],
     queryFn: fetchCustomers,
-    staleTime: 30000,
     retry: 1,
   });
 
@@ -265,9 +264,9 @@ export default function CustomersPage() {
         }
       />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[220px] max-w-md">
+          <div className="relative flex-1 min-w-[120px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search name, company, phone, email…"
@@ -278,7 +277,7 @@ export default function CustomersPage() {
           </div>
           {!showArchived && (
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-32 h-9">
+              <SelectTrigger className="w-28 h-9 sm:w-32">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
@@ -303,7 +302,7 @@ export default function CustomersPage() {
           </div>
         )}
 
-        <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+        <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map(hg => (

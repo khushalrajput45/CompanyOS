@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { logAudit } from "@/lib/utils/logAudit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -160,7 +161,6 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
         .order("name");
       return data ?? [];
     },
-    staleTime: 60000,
   });
 
   const { data: rawProducts = [] } = useQuery({
@@ -192,7 +192,6 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
         tax_rate:      p.tax_rate       ?? 18,
       }));
     },
-    staleTime: 60000,
   });
 
   // Existing movements for this invoice (edit mode only) — needed for stock restoration
@@ -426,6 +425,7 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
         }
       }
 
+      logAudit({ action: "updated", module: "invoices", record_id: invoice.id, record_name: invoice.invoice_number });
       onSuccess(invoice.id);
 
     } else {
@@ -496,6 +496,7 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
         }
       }
 
+      logAudit({ action: "created", module: "invoices", record_id: invData.id, record_name: invData.invoice_number });
       onSuccess(invData.id);
     }
   }

@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { logAudit } from "@/lib/utils/logAudit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -95,7 +96,6 @@ export function StockMovementForm({ onSuccess, defaultMovementType = "receipt" }
         reorderPoint: p.reorder_point ?? undefined,
       }));
     },
-    staleTime: 60000,
   });
 
   const { data: locations = [] } = useQuery({
@@ -184,6 +184,17 @@ export function StockMovementForm({ onSuccess, defaultMovementType = "receipt" }
       setSubmitError(error.message);
       return;
     }
+
+    const actionMap: Record<string, string> = {
+      purchase: "stock_added", return_in: "stock_added", adjustment_in: "stock_adjusted",
+      sale: "stock_removed", return_out: "stock_removed", adjustment_out: "stock_adjusted",
+    };
+    logAudit({
+      action: actionMap[values.movement_type] ?? "stock_adjusted",
+      module: "inventory",
+      record_name: values.reference_no || values.movement_type,
+      metadata: { movement_type: values.movement_type, quantity: values.quantity },
+    });
 
     onSuccess();
   }

@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { logAudit } from "@/lib/utils/logAudit";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +26,7 @@ import {
 } from "lucide-react";
 import type { PurchaseOrder, PurchaseOrderItem, POStatus, Location, Vendor, CompanySettings } from "@/lib/types";
 import { useCompanySettings } from "@/lib/hooks/useCompanySettings";
-import { escHtml as esc, buildCompanyHeader } from "@/lib/utils/printUtils";
+import { escHtml as esc, buildCompanyHeader, buildSignatureBlock, buildTermsBlock } from "@/lib/utils/printUtils";
 import { useProfile } from "@/lib/hooks/useProfile";
 import { format } from "date-fns";
 import { preventDecimalInput } from "@/lib/utils";
@@ -181,9 +182,11 @@ function buildPOPrintHTML(po: FullPO, settings: CompanySettings | null): string 
 
   ${po.notes ? `<div style="margin-top:24px"><div class="label">Notes</div><div style="white-space:pre-line">${esc(po.notes)}</div></div>` : ""}
 
+  ${buildTermsBlock(settings, "purchase_order")}
+
   <div class="footer">
     <div><div class="sig-box">Prepared By</div></div>
-    <div><div class="sig-box">Authorized Signatory</div></div>
+    <div>${buildSignatureBlock(settings)}</div>
   </div>
 </body>
 </html>`;
@@ -196,7 +199,7 @@ export default function PODetailPage() {
   const router  = useRouter();
   const queryClient = useQueryClient();
   const { data: profile } = useProfile();
-  const isAdmin = profile?.role === "admin" || profile?.role === "manager";
+  const isAdmin = ["owner","admin","manager"].includes(profile?.role ?? "");
   const { data: companySettings } = useCompanySettings();
 
   // GRN success state
@@ -215,14 +218,12 @@ export default function PODetailPage() {
   const { data: po, isLoading, error } = useQuery({
     queryKey: ["purchase-order", id],
     queryFn: () => fetchPO(id),
-    staleTime: 30000,
     retry: 1,
   });
 
   const { data: locations = [] } = useQuery({
     queryKey: ["locations-active"],
     queryFn: fetchLocations,
-    staleTime: 60000,
   });
 
   // ── Mutations ────────────────────────────────────────────────────────────────
@@ -236,7 +237,8 @@ export default function PODetailPage() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, newStatus) => {
+      logAudit({ action: "status_changed", module: "purchase_orders", record_id: id, record_name: po?.po_number, metadata: { new_status: newStatus } });
       queryClient.invalidateQueries({ queryKey: ["purchase-order", id] });
       queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
     },
@@ -256,6 +258,8 @@ export default function PODetailPage() {
       return data as { id: string; grn_number: string };
     },
     onSuccess: (data) => {
+      logAudit({ action: "goods_received", module: "purchase_orders", record_id: id, record_name: po?.po_number, metadata: { grn_number: data.grn_number, grn_id: data.id } });
+      logAudit({ action: "created", module: "grn", record_id: data.id, record_name: data.grn_number });
       setLastGRN(data);
       queryClient.invalidateQueries({ queryKey: ["purchase-order", id] });
       queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
@@ -277,6 +281,7 @@ export default function PODetailPage() {
       if (error) throw error;
     },
     onSuccess: () => {
+      logAudit({ action: "deleted", module: "purchase_orders", record_id: id, record_name: po?.po_number });
       queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
       router.push("/purchase-orders");
     },
@@ -522,7 +527,7 @@ export default function PODetailPage() {
           </div>
 
           {/* ── Line Items ────────────────────────────────────── */}
-          <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+          <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -599,8 +604,8 @@ export default function PODetailPage() {
 
           {/* ── Meta ──────────────────────────────────────────── */}
           <div className="text-xs text-muted-foreground text-right space-y-0.5">
-            <p>Created {format(new Date(po.created_at), "dd MMM yyyy, HH:mm")}</p>
-            {po.updated_at !== po.created_at && (
+            {po.created_at && <p>Created {format(new Date(po.created_at), "dd MMM yyyy, HH:mm")}</p>}
+            {po.updated_at && po.updated_at !== po.created_at && (
               <p>Updated {format(new Date(po.updated_at), "dd MMM yyyy, HH:mm")}</p>
             )}
           </div>

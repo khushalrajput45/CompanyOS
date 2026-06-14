@@ -34,7 +34,6 @@ export default function EditQuotationPage() {
   const { data: quotation, isLoading, error } = useQuery({
     queryKey: ["quotation-edit", id],
     queryFn: () => fetchQuotationWithItems(id),
-    staleTime: 30000,
     retry: 1,
   });
 
@@ -57,7 +56,7 @@ export default function EditQuotationPage() {
           title="Edit Quotation"
           breadcrumbs={[{ label: "Quotations", href: "/quotations" }, { label: "Loading…" }]}
         />
-        <div className="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto w-full space-y-4">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-6 max-w-5xl mx-auto w-full space-y-4">
           <Skeleton className="h-40 rounded-lg" />
           <Skeleton className="h-64 rounded-lg" />
         </div>

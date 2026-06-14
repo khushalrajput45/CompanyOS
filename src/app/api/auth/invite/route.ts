@@ -2,6 +2,9 @@ import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { logAdminEvent } from "@/lib/utils/logAdminEvent";
+import { logAuditServer } from "@/lib/utils/logAuditServer";
+import { sendInviteEmail } from "@/lib/email/sendInvite";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,43 +12,84 @@ const supabaseAdmin = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
+async function serverClient() {
+  const cookieStore = await cookies();
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+  );
+}
+
+async function getCallerProfile() {
+  const supabase = await serverClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, role, organization_id, full_name")
+    .eq("id", user.id)
+    .single();
+  return data;
+}
+
+async function getCompanyName(orgId: string): Promise<string> {
+  const { data } = await supabaseAdmin
+    .from("company_settings")
+    .select("company_name")
+    .eq("organization_id", orgId)
+    .single();
+  return (data as any)?.company_name ?? "Your Company";
+}
+
+// POST /api/auth/invite — send a new invitation
 export async function POST(request: Request) {
   try {
-    // Verify the caller is an admin
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-    );
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-
-    const { data: callerProfile } = await supabase
-      .from("profiles").select("role, organization_id").eq("id", user.id).single();
-
-    if (callerProfile?.role !== "admin") {
-      return NextResponse.json({ error: "Only admins can invite users." }, { status: 403 });
+    const caller = await getCallerProfile();
+    if (!caller) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    if (!["owner", "admin"].includes(caller.role)) {
+      return NextResponse.json({ error: "Only owners and admins can invite users." }, { status: 403 });
     }
 
-    const { email, full_name, role } = await request.json();
+    const body = await request.json();
+    const email = (body.email ?? "").trim().toLowerCase();
+    const full_name = (body.full_name ?? "").trim();
+    const role = body.role as string;
+
     if (!email || !full_name || !role) {
       return NextResponse.json({ error: "Email, name and role are required." }, { status: 400 });
     }
+    if (!["admin", "manager", "employee", "viewer"].includes(role)) {
+      return NextResponse.json({ error: "Invalid role." }, { status: 400 });
+    }
 
-    // Check if user already exists
+    // Block duplicate profiles
     const { data: existingProfile } = await supabaseAdmin
-      .from("profiles").select("id").eq("email", email.trim().toLowerCase()).single();
-
+      .from("profiles")
+      .select("id")
+      .eq("email", email)
+      .maybeSingle();
     if (existingProfile) {
       return NextResponse.json({ error: "A user with this email already exists." }, { status: 400 });
     }
 
-    // Create the auth user (auto-confirmed, temporary password)
-    const tempPassword = Math.random().toString(36).slice(-12) + "A1!";
+    // Block duplicate pending invitations
+    const { data: existingInvite } = await supabaseAdmin
+      .from("invitations")
+      .select("id")
+      .eq("email", email)
+      .eq("organization_id", caller.organization_id)
+      .is("accepted_at", null)
+      .is("cancelled_at", null)
+      .maybeSingle();
+    if (existingInvite) {
+      return NextResponse.json({ error: "A pending invitation already exists for this email." }, { status: 400 });
+    }
+
+    // Create auth user (confirmed, temp password) so the email is reserved
+    const tempPassword = crypto.randomUUID().replace(/-/g, "") + "A1!";
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: email.trim().toLowerCase(),
+      email,
       password: tempPassword,
       email_confirm: true,
     });
@@ -54,19 +98,18 @@ export async function POST(request: Request) {
       if (authError.message.toLowerCase().includes("already")) {
         return NextResponse.json({ error: "A user with this email already exists." }, { status: 400 });
       }
-      // Fallback: try to just create the profile and send reset email
       return NextResponse.json({ error: "Failed to create user. Please try again." }, { status: 500 });
     }
 
     const userId = authData.user.id;
 
-    // Create profile in the same org as the admin
+    // Create profile
     const { error: profileError } = await supabaseAdmin.from("profiles").insert({
       id: userId,
-      organization_id: callerProfile.organization_id,
-      full_name: full_name.trim(),
+      organization_id: caller.organization_id,
+      full_name,
       role,
-      email: email.trim().toLowerCase(),
+      email,
     });
 
     if (profileError) {
@@ -74,12 +117,99 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to create user profile." }, { status: 500 });
     }
 
-    // Send password reset so they can set their own password
-    await supabaseAdmin.auth.admin.generateLink({
+    // Create invitation record (token auto-generated by DB default)
+    const { data: invite, error: inviteError } = await supabaseAdmin
+      .from("invitations")
+      .insert({
+        organization_id: caller.organization_id,
+        email,
+        full_name,
+        role,
+        invited_by: caller.id,
+        user_id: userId,
+      })
+      .select("token")
+      .single();
+
+    if (inviteError || !invite) {
+      console.error("Invitation insert error:", inviteError);
+    }
+
+    // Generate recovery link (does NOT send an email — we send our own)
+    const origin = new URL(request.url).origin;
+    const redirectTo = invite?.token
+      ? `${origin}/reset-password?invite=${invite.token}`
+      : `${origin}/reset-password`;
+
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: "recovery",
-      email: email.trim().toLowerCase(),
-      options: { redirectTo: `${new URL(request.url).origin}/reset-password` },
+      email,
+      options: { redirectTo },
     });
+
+    if (linkError || !linkData?.properties?.action_link) {
+      // Fallback: let Supabase send the generic reset email
+      await supabaseAdmin.auth.resetPasswordForEmail(email, { redirectTo });
+    } else {
+      const companyName = await getCompanyName(caller.organization_id);
+      await sendInviteEmail({
+        to: email,
+        recipientName: full_name,
+        inviterName: (caller as any).full_name ?? "Your admin",
+        companyName,
+        role,
+        inviteUrl: linkData.properties.action_link,
+        expiresInDays: 7,
+      });
+    }
+
+    logAdminEvent({
+      organization_id: caller.organization_id,
+      actor_id: caller.id,
+      actor_name: (caller as any).full_name ?? "Admin",
+      event_type: "user_invited",
+      target_name: full_name,
+      target_email: email,
+      metadata: { role },
+    });
+    logAuditServer({
+      organization_id: caller.organization_id,
+      user_id: caller.id,
+      user_name: (caller as any).full_name ?? "Admin",
+      action: "user_invited",
+      module: "user_management",
+      record_name: full_name,
+      metadata: { email, role },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("Invite error:", err);
+    return NextResponse.json({ error: "An unexpected error occurred." }, { status: 500 });
+  }
+}
+
+// PATCH /api/auth/invite — mark invitation accepted
+export async function PATCH(request: Request) {
+  try {
+    const { token } = await request.json();
+    if (!token) return NextResponse.json({ error: "Token required." }, { status: 400 });
+
+    const supabase = await serverClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+
+    await supabaseAdmin
+      .from("invitations")
+      .update({ accepted_at: new Date().toISOString(), user_id: user.id })
+      .eq("token", token)
+      .is("accepted_at", null)
+      .is("cancelled_at", null);
+
+    await supabaseAdmin
+      .from("profiles")
+      .update({ last_login_at: new Date().toISOString() })
+      .eq("id", user.id);
 
     return NextResponse.json({ success: true });
   } catch {

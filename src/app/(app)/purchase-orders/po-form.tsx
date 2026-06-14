@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { logAudit } from "@/lib/utils/logAudit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -117,7 +118,6 @@ export function POForm({ po, onSuccess, onCancel }: Props) {
         .order("name");
       return data ?? [];
     },
-    staleTime: 60000,
   });
 
   const { data: rawProducts = [] } = useQuery({
@@ -150,7 +150,6 @@ export function POForm({ po, onSuccess, onCancel }: Props) {
         tax_rate:      p.tax_rate       ?? 18,
       }));
     },
-    staleTime: 60000,
   });
 
   const products: ProductOption[] = rawProducts;
@@ -257,7 +256,7 @@ export function POForm({ po, onSuccess, onCancel }: Props) {
           }))
         );
       if (insErr) { setSubmitError(insErr.message); return; }
-
+      logAudit({ action: "updated", module: "purchase_orders", record_id: po.id, record_name: po.po_number });
       onSuccess(po.id);
 
     } else {
@@ -300,6 +299,7 @@ export function POForm({ po, onSuccess, onCancel }: Props) {
         return;
       }
 
+      logAudit({ action: "created", module: "purchase_orders", record_id: poData.id, record_name: poData.po_number });
       onSuccess(poData.id);
     }
   }

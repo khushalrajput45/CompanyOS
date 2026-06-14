@@ -25,61 +25,27 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // getSession() reads from cookie — zero network call, instant
+  const { data: { session } } = await supabase.auth.getSession();
   const { pathname } = request.nextUrl;
 
   const isPublicRoute =
     pathname === "/" ||
-    pathname === "/login" ||
     pathname.startsWith("/login") ||
-    pathname === "/register" ||
     pathname.startsWith("/register") ||
-    pathname === "/reset-password" ||
     pathname.startsWith("/reset-password") ||
-    pathname.startsWith("/auth/callback");
+    pathname.startsWith("/auth/");
 
-  // Not logged in → redirect to login (landing page "/" is public, not login)
-  if (!user && !isPublicRoute) {
+  if (!session && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  // Logged in on landing/login/register → redirect to dashboard
-  if (user && (pathname === "/" || pathname === "/login" || pathname.startsWith("/register"))) {
+  if (session && (pathname === "/" || pathname === "/login" || pathname.startsWith("/register"))) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
-  }
-
-  // Check profile for authenticated users on protected routes
-  if (user && !isPublicRoute && !pathname.startsWith("/setup") && !pathname.startsWith("/api/")) {
-    try {
-      const { data: profile, error: profileErr } = await supabase
-        .from("profiles")
-        .select("is_disabled")
-        .eq("id", user.id)
-        .single();
-
-      if (profile?.is_disabled) {
-        await supabase.auth.signOut();
-        const url = request.nextUrl.clone();
-        url.pathname = "/login";
-        url.searchParams.set("error", "Your account has been disabled. Contact your administrator.");
-        return NextResponse.redirect(url);
-      }
-
-      // Profile not found — account setup may still be in progress, sign out cleanly
-      if (profileErr && profileErr.code === "PGRST116") {
-        await supabase.auth.signOut();
-        const url = request.nextUrl.clone();
-        url.pathname = "/login";
-        url.searchParams.set("error", "Account setup is not complete. Please register again.");
-        return NextResponse.redirect(url);
-      }
-    } catch {
-      // Network or unexpected error — don't sign out, just proceed
-    }
   }
 
   return supabaseResponse;

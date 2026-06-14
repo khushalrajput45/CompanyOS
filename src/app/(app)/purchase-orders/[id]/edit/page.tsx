@@ -29,7 +29,6 @@ export default function EditPOPage() {
   const { data: po, isLoading, error } = useQuery({
     queryKey: ["purchase-order-edit", id],
     queryFn: () => fetchPO(id),
-    staleTime: 30000,
     retry: 1,
   });
 

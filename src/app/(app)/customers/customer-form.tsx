@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
+import { logAudit } from "@/lib/utils/logAudit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -112,6 +113,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: Props) {
         .update(payload)
         .eq("id", customer.id);
       if (error) { setSubmitError(error.message); return; }
+      logAudit({ action: "updated", module: "customers", record_id: customer.id, record_name: values.name });
       onSuccess(customer.id);
     } else {
       const { data, error } = await supabase
@@ -120,6 +122,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: Props) {
         .select("id")
         .single();
       if (error) { setSubmitError(error.message); return; }
+      logAudit({ action: "created", module: "customers", record_id: data.id, record_name: values.name });
       onSuccess(data.id);
     }
   }

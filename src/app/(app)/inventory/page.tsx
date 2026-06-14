@@ -107,7 +107,7 @@ function StockTable({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+      <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
@@ -178,7 +178,7 @@ function InventoryPageContent() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { data: profile } = useProfile();
-  const isAdmin = profile?.role === "admin" || profile?.role === "manager";
+  const isAdmin = ["owner","admin","manager"].includes(profile?.role ?? "");
 
   // URL-driven initial state
   const [activeTab, setActiveTab]     = useState<TabValue>((searchParams.get("tab") as TabValue) ?? "current");
@@ -192,13 +192,11 @@ function InventoryPageContent() {
   const { data: stockLevels = [], isLoading: levelsLoading } = useQuery({
     queryKey: ["stock-levels"],
     queryFn: fetchStockLevels,
-    staleTime: 30000,
   });
 
   const { data: movements = [], isLoading: movementsLoading } = useQuery({
     queryKey: ["stock-movements"],
     queryFn: fetchMovements,
-    staleTime: 30000,
   });
 
   const stockColumns = useMemo<ColumnDef<EnrichedStockLevel>[]>(
@@ -289,7 +287,7 @@ function InventoryPageContent() {
       {
         accessorKey: "created_at",
         header: "Date",
-        cell: ({ getValue }) => format(new Date(getValue() as string), "dd MMM yyyy HH:mm"),
+        cell: ({ getValue }) => { const v = getValue() as string | null; return v ? format(new Date(v), "dd MMM yyyy HH:mm") : "—"; },
       },
       { accessorFn: (r) => r.product?.sku, header: "SKU",
         cell: ({ getValue }) => <span className="font-mono text-xs">{getValue() as string}</span>,
@@ -384,7 +382,7 @@ function InventoryPageContent() {
         }
       />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4">
         <div className="relative max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -472,7 +470,7 @@ function InventoryPageContent() {
               )}
               <span className="text-xs text-muted-foreground ml-auto">{filteredMovements.length} movement{filteredMovements.length !== 1 ? "s" : ""}</span>
             </div>
-            <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+            <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
               <Table>
                 <TableHeader>
                   {movementTable.getHeaderGroups().map((hg) => (

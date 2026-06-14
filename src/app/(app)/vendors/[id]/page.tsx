@@ -232,14 +232,12 @@ export default function VendorDetailPage() {
   const { data: vendor, isLoading, error } = useQuery({
     queryKey: ["vendor", id],
     queryFn:  () => fetchVendor(id),
-    staleTime: 30000,
     retry: 1,
   });
 
   const { data: ledger, isLoading: ledgerLoading } = useQuery({
     queryKey: ["vendor-ledger", id],
     queryFn:  () => fetchVendorLedger(id),
-    staleTime: 30000,
     enabled:  !!id,
   });
 
@@ -504,7 +502,7 @@ export default function VendorDetailPage() {
           )}
 
           {/* ── Account Ledger ──────────────────────────────── */}
-          <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+          <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
             <div className="px-5 py-3 border-b bg-muted/30 flex items-center justify-between">
               <h2 className="text-sm font-semibold flex items-center gap-2">
                 <TrendingDown className="h-4 w-4 text-muted-foreground" />
@@ -625,7 +623,7 @@ export default function VendorDetailPage() {
           </div>
 
           {/* ── Purchase Orders ─────────────────────────────── */}
-          <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+          <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
             <div className="px-5 py-3 border-b bg-muted/30 flex items-center justify-between">
               <h2 className="text-sm font-semibold flex items-center gap-2">
                 <ShoppingBag className="h-4 w-4 text-muted-foreground" />
@@ -706,7 +704,7 @@ export default function VendorDetailPage() {
           </div>
 
           {/* ── Payment History ─────────────────────────────── */}
-          <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+          <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
             <div className="px-5 py-3 border-b bg-muted/30 flex items-center justify-between">
               <h2 className="text-sm font-semibold flex items-center gap-2">
                 <Banknote className="h-4 w-4 text-muted-foreground" />
@@ -829,11 +827,11 @@ export default function VendorDetailPage() {
           {/* Meta */}
           <div className="text-xs text-muted-foreground text-right space-y-0.5">
             <p>
-              Added {new Date(vendor.created_at).toLocaleDateString("en-IN", {
+              Added {vendor.created_at ? new Date(vendor.created_at).toLocaleDateString("en-IN", {
                 day: "numeric", month: "short", year: "numeric",
-              })}
+              }) : "—"}
             </p>
-            {vendor.updated_at !== vendor.created_at && (
+            {vendor.updated_at && vendor.updated_at !== vendor.created_at && (
               <p>
                 Updated {new Date(vendor.updated_at).toLocaleDateString("en-IN", {
                   day: "numeric", month: "short", year: "numeric",

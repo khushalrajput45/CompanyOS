@@ -110,21 +110,18 @@ export default function GRNDetailPage() {
   const { data: grn, isLoading, error } = useQuery({
     queryKey: ["grn", id],
     queryFn: () => fetchGRN(id),
-    staleTime: 30000,
     retry: 1,
   });
 
   const { data: items = [] } = useQuery({
     queryKey: ["grn-items", id],
     queryFn: () => fetchGRNItems(id),
-    staleTime: 30000,
     enabled: !!grn,
   });
 
   const { data: movements = [] } = useQuery({
     queryKey: ["grn-movements", grn?.grn_number],
     queryFn: () => fetchStockMovements(grn!.grn_number),
-    staleTime: 30000,
     enabled: !!grn?.grn_number,
   });
 
@@ -251,7 +248,7 @@ export default function GRNDetailPage() {
           </div>
 
           {/* ── Items Received ────────────────────────────────── */}
-          <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+          <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
             <div className="px-4 py-3 border-b bg-muted/30">
               <h3 className="text-sm font-semibold">Items Received</h3>
             </div>
@@ -300,7 +297,7 @@ export default function GRNDetailPage() {
 
           {/* ── Stock Movements (audit) ───────────────────────── */}
           {movements.length > 0 && (
-            <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+            <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
               <div className="px-4 py-3 border-b bg-muted/30">
                 <h3 className="text-sm font-semibold">Stock Movements</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -359,7 +356,7 @@ export default function GRNDetailPage() {
 
           {/* ── Meta ──────────────────────────────────────────── */}
           <div className="text-xs text-muted-foreground text-right">
-            <p>Recorded {format(new Date(grn.created_at), "dd MMM yyyy, HH:mm")}</p>
+            <p>Recorded {grn.created_at ? format(new Date(grn.created_at), "dd MMM yyyy, HH:mm") : "—"}</p>
           </div>
 
         </div>

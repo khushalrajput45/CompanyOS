@@ -171,7 +171,6 @@ export default function VendorPaymentsPage() {
   const { data = [], isLoading, error } = useQuery({
     queryKey: ["vendor-payments-list"],
     queryFn: fetchVendorPayments,
-    staleTime: 30000,
   });
 
   const totalAmount = useMemo(
@@ -226,7 +225,7 @@ export default function VendorPaymentsPage() {
           </div>
 
           {/* ── Table ────────────────────────────────────────── */}
-          <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+          <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
             {isLoading ? (
               <div className="p-6 space-y-3">
                 {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-12 rounded" />)}

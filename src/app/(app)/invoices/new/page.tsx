@@ -25,7 +25,7 @@ async function fetchQuotationForConversion(id: string): Promise<InvoiceInitialDa
     customer_id:  d.customer_id,
     notes:        d.notes ?? null,
     items: (d.items ?? [])
-      .sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order)
+      .sort((a: { sort_order: number | null }, b: { sort_order: number | null }) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
       .map((it: { product_id: string | null; description: string; quantity: number; unit_price: number; tax_rate: number }) => ({
         product_id:  it.product_id,
         description: it.description,
@@ -67,7 +67,7 @@ function NewInvoiceContent() {
           title={title}
           breadcrumbs={[{ label: "Invoices", href: "/invoices" }, { label: "Loading…" }]}
         />
-        <div className="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto w-full space-y-4">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-6 max-w-5xl mx-auto w-full space-y-4">
           <Skeleton className="h-40 rounded-lg" />
           <Skeleton className="h-64 rounded-lg" />
         </div>

@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { logAudit } from "@/lib/utils/logAudit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -112,7 +113,6 @@ export function QuotationForm({ quotation, onSuccess, onCancel }: Props) {
         .order("name");
       return data ?? [];
     },
-    staleTime: 60000,
   });
 
   const { data: rawProducts = [] } = useQuery({
@@ -144,7 +144,6 @@ export function QuotationForm({ quotation, onSuccess, onCancel }: Props) {
         tax_rate: p.tax_rate ?? 18,
       }));
     },
-    staleTime: 60000,
   });
 
   // Keep a quick look-up for tax_rate per product (not in ProductOption interface)
@@ -249,6 +248,7 @@ export function QuotationForm({ quotation, onSuccess, onCancel }: Props) {
         setSubmitError(insErr.message);
         return;
       }
+      logAudit({ action: "updated", module: "quotations", record_id: quotation.id, record_name: quotation.quotation_number });
       onSuccess(quotation.id);
     } else {
       // Create quotation header
@@ -286,6 +286,7 @@ export function QuotationForm({ quotation, onSuccess, onCancel }: Props) {
         setSubmitError(insErr.message);
         return;
       }
+      logAudit({ action: "created", module: "quotations", record_id: qData.id });
       onSuccess(qData.id);
     }
   }

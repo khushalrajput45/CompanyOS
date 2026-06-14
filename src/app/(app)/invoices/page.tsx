@@ -85,14 +85,23 @@ async function fetchInvoices(): Promise<InvoiceRow[]> {
     .select("*, customer:customers(name, company_name, phone, gst_number)")
     .order("invoice_date", { ascending: false });
   if (error) throw error;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((inv: any) => ({
-    ...inv,
-    customer_name:    inv.customer?.name         ?? "—",
-    customer_company: inv.customer?.company_name ?? null,
-    customer_phone:   inv.customer?.phone        ?? null,
-    customer_gst:     inv.customer?.gst_number   ?? null,
-  }));
+  return (data ?? []).map((inv: any) => {
+    const isOverdue =
+      (inv.status === "sent" || inv.status === "partial") &&
+      inv.due_date &&
+      new Date(inv.due_date) < today;
+    return {
+      ...inv,
+      status:           isOverdue ? "overdue" as InvoiceStatus : inv.status,
+      customer_name:    inv.customer?.name         ?? "—",
+      customer_company: inv.customer?.company_name ?? null,
+      customer_phone:   inv.customer?.phone        ?? null,
+      customer_gst:     inv.customer?.gst_number   ?? null,
+    };
+  });
 }
 
 function fmtDate(d: string) {
@@ -118,7 +127,6 @@ function InvoicesPageContent() {
   const { data: invoices = [], isLoading, error } = useQuery({
     queryKey: ["invoices"],
     queryFn: fetchInvoices,
-    staleTime: 30000,
     retry: 1,
   });
 
@@ -293,10 +301,10 @@ function InvoicesPageContent() {
         }
       />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4">
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[220px] max-w-md">
+          <div className="relative flex-1 min-w-[120px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search by invoice #, customer…"
@@ -306,7 +314,7 @@ function InvoicesPageContent() {
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-40 h-9">
+            <SelectTrigger className="w-32 h-9 sm:w-40">
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
             <SelectContent>
@@ -328,7 +336,7 @@ function InvoicesPageContent() {
         )}
 
         {/* Table */}
-        <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+        <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map(hg => (

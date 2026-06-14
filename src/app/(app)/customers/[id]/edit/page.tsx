@@ -29,7 +29,6 @@ export default function EditCustomerPage() {
   const { data: customer, isLoading, error } = useQuery({
     queryKey: ["customer", id],
     queryFn: () => fetchCustomer(id),
-    staleTime: 30000,
     retry: 1,
   });
 

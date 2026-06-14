@@ -650,7 +650,7 @@ export default function DashboardDetailPage() {
   const searchParams = useSearchParams();
   const router       = useRouter();
   const { data: profile } = useProfile();
-  const isAdmin = profile?.role === "admin" || profile?.role === "manager";
+  const isAdmin = ["owner","admin","manager"].includes(profile?.role ?? "");
 
   const view  = (params.view as string) ?? "";
   const meta  = VIEW_META[view] ?? { title: view, defaultSort: "", defaultDir: "desc" as SortDir };
@@ -840,7 +840,7 @@ export default function DashboardDetailPage() {
       </div>
 
       {/* ── Content ─────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-5">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-5">
 
         {/* Profit summary cards */}
         {view === "profit" && profitSummary && (
@@ -908,7 +908,7 @@ export default function DashboardDetailPage() {
         </div>
 
         {/* Table */}
-        <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+        <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
           {loading ? (
             <div className="p-6 space-y-3">
               {[...Array(8)].map((_, i) => (

@@ -85,28 +85,10 @@ function RegisterPageContent() {
       return;
     }
 
-    const userId = signUpData.user?.id;
-    if (!userId) {
-      setError("Failed to create account. Please try again.");
-      setSubmitting(false);
-      return;
-    }
+    // The handle_new_user_signup trigger automatically creates the org + owner profile
+    // No RPC call needed
 
-    // Step 2: Create org + profile via database function
-    const { data: rpcData, error: rpcError } = await supabase.rpc("create_org_and_profile", {
-      p_user_id: userId,
-      p_company: form.companyName.trim(),
-      p_full_name: form.ownerName.trim(),
-      p_email: emailNormalized,
-    });
-
-    if (rpcError || (rpcData as { success?: boolean })?.success === false) {
-      setError("Failed to set up your organization. Please try again.");
-      setSubmitting(false);
-      return;
-    }
-
-    // Step 3: Sign in (needed if email confirmation was on and no session yet)
+    // Step 2: Sign in (needed if email confirmation was on and no session yet)
     if (!signUpData.session) {
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: emailNormalized,

@@ -76,7 +76,7 @@ function ProductsPageContent() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   // Use false until after hydration so server/client column structure matches
-  const isAdmin = mounted && (profile?.role === "admin" || profile?.role === "manager");
+  const isAdmin = mounted && (["owner","admin","manager"].includes(profile?.role ?? ""));
   // Initialize filters from URL params (dashboard drill-down)
   const [globalFilter, setGlobalFilter]     = useState(searchParams.get("search") ?? "");
   const [brandFilter, setBrandFilter]       = useState("all");
@@ -90,13 +90,11 @@ function ProductsPageContent() {
   const { data: activeProducts = [], isLoading } = useQuery({
     queryKey: ["products", "active"],
     queryFn: () => fetchProducts(false),
-    staleTime: 30000,
   });
 
   const { data: archivedProducts = [] } = useQuery({
     queryKey: ["products", "archived"],
     queryFn: () => fetchProducts(true),
-    staleTime: 30000,
   });
 
   const products = showArchived ? archivedProducts : activeProducts;
@@ -104,7 +102,6 @@ function ProductsPageContent() {
   const { data: stockLevels = [] } = useQuery({
     queryKey: ["stock-levels-summary"],
     queryFn: fetchStockSummary,
-    staleTime: 30000,
   });
 
   // Aggregate stock qty per product
@@ -243,7 +240,7 @@ function ProductsPageContent() {
         header: "Inventory Value",
         cell: ({ row }) => {
           const qty = stockByProduct.get(row.original.id) ?? 0;
-          const price = row.original.selling_price ?? 0;
+          const price = row.original.cost_price ?? row.original.selling_price ?? 0;
           const value = qty * price;
           return (
             <span className="text-sm font-medium">
@@ -374,7 +371,7 @@ function ProductsPageContent() {
         }
       />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4">
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -431,7 +428,7 @@ function ProductsPageContent() {
         )}
 
         {/* Table */}
-        <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+        <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((hg) => (
