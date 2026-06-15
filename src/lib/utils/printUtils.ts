@@ -1,4 +1,4 @@
-import type { CompanySettings } from "@/lib/types";
+import type { CompanySettings, Address } from "@/lib/types";
 
 /** Escape HTML special characters for safe injection into print templates. */
 export function escHtml(s: string | null | undefined): string {
@@ -8,6 +8,65 @@ export function escHtml(s: string | null | undefined): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/** Format an Address object into a comma-separated single line. */
+export function fmtAddress(addr: Address | null | undefined): string {
+  if (!addr) return "";
+  return [addr.line1, addr.line2, addr.city, addr.state, addr.pincode]
+    .filter(Boolean)
+    .map(s => escHtml(s!))
+    .join(", ");
+}
+
+/**
+ * Build the Bill To + Ship To meta-grid HTML.
+ * If shipping address is provided, renders a 3-column grid: Bill To | Ship To | Doc Info.
+ * If no shipping, renders the standard 2-column grid: Bill To | Doc Info.
+ */
+export function buildBillShipBlock(params: {
+  displayName: string;
+  contactName?: string | null;
+  billingAddr: string;
+  shippingAddr: string;
+  phone?: string | null;
+  email?: string | null;
+  gstNumber?: string | null;
+  docInfoHtml: string;
+}): string {
+  const { displayName, contactName, billingAddr, shippingAddr, phone, email, gstNumber, docInfoHtml } = params;
+
+  const billToContent = `
+    <strong>${displayName}</strong><br>
+    ${contactName && contactName !== displayName ? escHtml(contactName) + "<br>" : ""}
+    ${billingAddr ? billingAddr + "<br>" : ""}
+    ${phone ? "📞 " + escHtml(phone) + "<br>" : ""}
+    ${email ? "✉ " + escHtml(email) + "<br>" : ""}
+    ${gstNumber ? `<span class="label">GST: </span>${escHtml(gstNumber)}` : ""}`;
+
+  if (shippingAddr) {
+    return `
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px">
+    <div class="meta-box">
+      <h3>Bill To</h3>
+      <p>${billToContent}</p>
+    </div>
+    <div class="meta-box">
+      <h3>Ship To</h3>
+      <p>${shippingAddr}</p>
+    </div>
+    <div class="meta-box">${docInfoHtml}</div>
+  </div>`;
+  }
+
+  return `
+  <div class="meta-grid">
+    <div class="meta-box">
+      <h3>Bill To</h3>
+      <p>${billToContent}</p>
+    </div>
+    <div class="meta-box">${docInfoHtml}</div>
+  </div>`;
 }
 
 /** Build the company header HTML block used by invoice / quotation / PO templates. */

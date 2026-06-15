@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import type { Quotation, QuotationItem, QuotationStatus, CompanySettings } from "@/lib/types";
 import { useCompanySettings } from "@/lib/hooks/useCompanySettings";
-import { escHtml as esc, buildCompanyHeader, buildPaymentDetails, buildSignatureBlock, buildTermsBlock } from "@/lib/utils/printUtils";
+import { escHtml as esc, buildCompanyHeader, buildPaymentDetails, buildSignatureBlock, buildTermsBlock, buildBillShipBlock, fmtAddress } from "@/lib/utils/printUtils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -84,8 +84,12 @@ const STATUS_TRANSITIONS: Record<QuotationStatus, { label: string; next: Quotati
 function buildPrintHTML(q: QuotationFull, settings: CompanySettings | null): string {
   const customer = q.customer;
   const displayName = esc(customer.company_name ?? customer.name);
-  const billingAddr = esc([customer.address, customer.city, customer.state, customer.pincode]
-    .filter(Boolean).join(", "));
+
+  // Use stored address snapshot if available, else fall back to customer record
+  const billingAddr = q.billing_address
+    ? fmtAddress(q.billing_address)
+    : esc([customer.address, customer.city, customer.state, customer.pincode].filter(Boolean).join(", "));
+  const shippingAddr = q.shipping_address ? fmtAddress(q.shipping_address) : "";
 
   const itemRows = q.items.map((it, i) => {
     const lineTotal = it.quantity * it.unit_price;
@@ -169,27 +173,22 @@ function buildPrintHTML(q: QuotationFull, settings: CompanySettings | null): str
     </div>
   </div>
 
-  <div class="meta-grid">
-    <div class="meta-box">
-      <h3>Bill To</h3>
-      <p>
-        <strong>${displayName}</strong><br>
-        ${esc(customer.name) !== displayName ? esc(customer.name) + "<br>" : ""}
-        ${billingAddr ? billingAddr + "<br>" : ""}
-        ${customer.phone ? "📞 " + esc(customer.phone) + "<br>" : ""}
-        ${customer.email ? "✉ " + esc(customer.email) + "<br>" : ""}
-        ${customer.gst_number ? "<span class='label'>GST: </span>" + esc(customer.gst_number) : ""}
-      </p>
-    </div>
-    <div class="meta-box">
+  ${buildBillShipBlock({
+    displayName,
+    contactName: customer.name,
+    billingAddr,
+    shippingAddr,
+    phone: customer.phone,
+    email: customer.email,
+    gstNumber: customer.gst_number,
+    docInfoHtml: `
       <h3>Quotation Info</h3>
       <p>
         <span class="label">Quotation #</span><br><strong>${esc(q.quotation_number)}</strong><br>
         <span class="label">Date</span><br>${fmtDate(q.quotation_date)}<br>
         ${q.valid_until ? `<span class="label">Valid Until</span><br>${fmtDate(q.valid_until)}<br>` : ""}
-      </p>
-    </div>
-  </div>
+      </p>`,
+  })}
 
   <table>
     <thead>

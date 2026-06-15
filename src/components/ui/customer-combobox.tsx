@@ -11,8 +11,11 @@ export interface CustomerOption {
   phone?: string | null;
   email?: string | null;
   gst_number?: string | null;
+  address?: string | null;
   city?: string | null;
   state?: string | null;
+  pincode?: string | null;
+  shipping_address?: { line1: string; line2?: string | null; city: string; state: string; pincode: string } | null;
 }
 
 interface Props {

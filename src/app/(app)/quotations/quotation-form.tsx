@@ -39,6 +39,8 @@ const quotationSchema = z.object({
   valid_until:     z.string().optional(),
   status:          z.enum(["draft", "sent", "accepted", "rejected", "expired"]),
   notes:           z.string().optional(),
+  billing_address:  z.any().optional(),
+  shipping_address: z.any().optional(),
   items: z.array(itemSchema).min(1, "Add at least one line item"),
 });
 
@@ -84,11 +86,13 @@ export function QuotationForm({ quotation, onSuccess, onCancel }: Props) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(quotationSchema) as any,
     defaultValues: {
-      customer_id:    quotation?.customer_id    ?? "",
-      quotation_date: quotation?.quotation_date ?? today,
-      valid_until:    quotation?.valid_until    ?? defaultValidUntil,
-      status:         quotation?.status         ?? "draft",
-      notes:          quotation?.notes          ?? "",
+      customer_id:     quotation?.customer_id    ?? "",
+      quotation_date:  quotation?.quotation_date ?? today,
+      valid_until:     quotation?.valid_until    ?? defaultValidUntil,
+      status:          quotation?.status         ?? "draft",
+      notes:           quotation?.notes          ?? "",
+      billing_address:  quotation?.billing_address  ?? null,
+      shipping_address: quotation?.shipping_address ?? null,
       items: quotation?.items?.map(it => ({
         product_id:  it.product_id  ?? "",
         description: it.description,
@@ -108,10 +112,10 @@ export function QuotationForm({ quotation, onSuccess, onCancel }: Props) {
       const supabase = createClient();
       const { data } = await supabase
         .from("customers")
-        .select("id, name, company_name, phone, email, gst_number, city, state")
+        .select("id, name, company_name, phone, email, gst_number, address, city, state, pincode, shipping_address")
         .eq("is_active", true)
         .order("name");
-      return data ?? [];
+      return (data ?? []) as CustomerOption[];
     },
   });
 
@@ -174,6 +178,18 @@ export function QuotationForm({ quotation, onSuccess, onCancel }: Props) {
   // ── Handlers ─────────────────────────────────────────────────────────────
   const customerId = watch("customer_id");
 
+  function onCustomerChange(id: string, customer: CustomerOption | null) {
+    setValue("customer_id", id, { shouldValidate: true });
+    if (customer) {
+      // Build billing address from flat customer fields
+      const billing = (customer.address || customer.city || customer.state)
+        ? { line1: customer.address ?? "", line2: null, city: customer.city ?? "", state: customer.state ?? "", pincode: customer.pincode ?? "" }
+        : null;
+      setValue("billing_address", billing);
+      setValue("shipping_address", customer.shipping_address ?? null);
+    }
+  }
+
   const onProductSelect = useCallback((index: number, productId: string, product: ProductOption | null) => {
     setValue(`items.${index}.product_id`, productId);
     if (product) {
@@ -200,11 +216,13 @@ export function QuotationForm({ quotation, onSuccess, onCancel }: Props) {
       const { error: qErr } = await supabase
         .from("quotations")
         .update({
-          customer_id:    values.customer_id,
-          quotation_date: values.quotation_date,
-          valid_until:    values.valid_until || null,
-          status:         values.status,
-          notes:          values.notes || null,
+          customer_id:      values.customer_id,
+          quotation_date:   values.quotation_date,
+          valid_until:      values.valid_until || null,
+          status:           values.status,
+          notes:            values.notes || null,
+          billing_address:  values.billing_address  ?? null,
+          shipping_address: values.shipping_address ?? null,
           subtotal, tax_amount: taxAmount, total_amount: totalAmount,
         })
         .eq("id", quotation.id);
@@ -255,11 +273,13 @@ export function QuotationForm({ quotation, onSuccess, onCancel }: Props) {
       const { data: qData, error: qErr } = await supabase
         .from("quotations")
         .insert({
-          customer_id:    values.customer_id,
-          quotation_date: values.quotation_date,
-          valid_until:    values.valid_until || null,
-          status:         values.status,
-          notes:          values.notes || null,
+          customer_id:      values.customer_id,
+          quotation_date:   values.quotation_date,
+          valid_until:      values.valid_until || null,
+          status:           values.status,
+          notes:            values.notes || null,
+          billing_address:  values.billing_address  ?? null,
+          shipping_address: values.shipping_address ?? null,
           subtotal, tax_amount: taxAmount, total_amount: totalAmount,
           created_by: user?.id ?? null,
           quotation_number: "",
@@ -306,7 +326,7 @@ export function QuotationForm({ quotation, onSuccess, onCancel }: Props) {
           <CustomerCombobox
             customers={customers}
             value={customerId ?? ""}
-            onChange={(id) => setValue("customer_id", id, { shouldValidate: true })}
+            onChange={onCustomerChange}
             error={errors.customer_id?.message}
             disabled={isSubmitting}
           />

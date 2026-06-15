@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import type { Invoice, InvoiceItem, InvoiceStatus, InvoicePayment, CompanySettings } from "@/lib/types";
 import { useCompanySettings } from "@/lib/hooks/useCompanySettings";
-import { escHtml as esc, buildCompanyHeader, buildPaymentDetails, buildSignatureBlock, buildTermsBlock } from "@/lib/utils/printUtils";
+import { escHtml as esc, buildCompanyHeader, buildPaymentDetails, buildSignatureBlock, buildTermsBlock, buildBillShipBlock, fmtAddress } from "@/lib/utils/printUtils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -124,8 +124,11 @@ const STATUS_TRANSITIONS: Record<
 function buildPrintHTML(inv: InvoiceFull, settings: CompanySettings | null): string {
   const customer    = inv.customer;
   const displayName = esc(customer.company_name ?? customer.name);
-  const billingAddr = esc([customer.address, customer.city, customer.state, customer.pincode]
-    .filter(Boolean).join(", "));
+
+  const billingAddr = inv.billing_address
+    ? fmtAddress(inv.billing_address)
+    : esc([customer.address, customer.city, customer.state, customer.pincode].filter(Boolean).join(", "));
+  const shippingAddr = inv.shipping_address ? fmtAddress(inv.shipping_address) : "";
 
   const itemRows = inv.items.map((it, i) => {
     const lineAmt = it.quantity * it.unit_price;
@@ -210,27 +213,22 @@ function buildPrintHTML(inv: InvoiceFull, settings: CompanySettings | null): str
     </div>
   </div>
 
-  <div class="meta-grid">
-    <div class="meta-box">
-      <h3>Bill To</h3>
-      <p>
-        <strong>${displayName}</strong><br>
-        ${esc(customer.name) !== displayName ? esc(customer.name) + "<br>" : ""}
-        ${billingAddr ? billingAddr + "<br>" : ""}
-        ${customer.phone ? "📞 " + esc(customer.phone) + "<br>" : ""}
-        ${customer.email ? "✉ " + esc(customer.email) + "<br>" : ""}
-        ${customer.gst_number ? `<span class="label">GST: </span>${esc(customer.gst_number)}` : ""}
-      </p>
-    </div>
-    <div class="meta-box">
+  ${buildBillShipBlock({
+    displayName,
+    contactName: customer.name,
+    billingAddr,
+    shippingAddr,
+    phone: customer.phone,
+    email: customer.email,
+    gstNumber: customer.gst_number,
+    docInfoHtml: `
       <h3>Invoice Info</h3>
       <p>
         <span class="label">Invoice #</span><br><strong>${esc(inv.invoice_number)}</strong><br>
         <span class="label">Invoice Date</span><br>${fmtDate(inv.invoice_date)}<br>
         ${inv.due_date ? `<span class="label">Due Date</span><br><strong>${fmtDate(inv.due_date)}</strong><br>` : ""}
-      </p>
-    </div>
-  </div>
+      </p>`,
+  })}
 
   <table>
     <thead>

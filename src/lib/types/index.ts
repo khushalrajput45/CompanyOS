@@ -1,5 +1,14 @@
 export type UserRole = "owner" | "admin" | "manager" | "employee" | "viewer";
 
+export interface Address {
+  line1: string;
+  line2?: string | null;
+  city: string;
+  state: string;
+  pincode: string;
+  country?: string | null;
+}
+
 export interface Profile {
   id: string;
   organization_id: string;
@@ -87,6 +96,7 @@ export interface Customer {
   city: string | null;
   state: string | null;
   pincode: string | null;
+  shipping_address: Address | null;
   notes: string | null;
   is_active: boolean;
   deleted_at: string | null;
@@ -221,6 +231,8 @@ export interface Quotation {
   total_amount: number;
   status: QuotationStatus;
   notes: string | null;
+  billing_address: Address | null;
+  shipping_address: Address | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -269,6 +281,8 @@ export interface Invoice {
   amount_paid: number;
   status: InvoiceStatus;
   notes: string | null;
+  billing_address: Address | null;
+  shipping_address: Address | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

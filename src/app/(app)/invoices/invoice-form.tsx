@@ -40,6 +40,8 @@ const invoiceSchema = z.object({
   // draft / sent / overdue only — partial & paid are payment-driven
   status:       z.enum(["draft", "sent", "overdue"]),
   notes:        z.string().optional(),
+  billing_address:  z.any().optional(),
+  shipping_address: z.any().optional(),
   items: z.array(itemSchema).min(1, "Add at least one line item"),
 });
 
@@ -62,9 +64,11 @@ const COMMON_TAX_RATES = [0, 5, 12, 18, 28];
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface InvoiceInitialData {
-  quotation_id:  string | null;
-  customer_id:   string;
-  notes:         string | null;
+  quotation_id:     string | null;
+  customer_id:      string;
+  notes:            string | null;
+  billing_address?: { line1: string; line2?: string | null; city: string; state: string; pincode: string } | null;
+  shipping_address?: { line1: string; line2?: string | null; city: string; state: string; pincode: string } | null;
   items: Array<{
     product_id:  string | null;
     description: string;
@@ -137,12 +141,14 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(invoiceSchema) as any,
     defaultValues: {
-      customer_id:  invoice?.customer_id  ?? initialData?.customer_id ?? "",
-      invoice_date: invoice?.invoice_date ?? today,
-      due_date:     invoice?.due_date     ?? defaultDueDate,
-      status:       initialStatus(),
-      notes:        invoice?.notes        ?? initialData?.notes        ?? "",
-      items:        defaultItems,
+      customer_id:      invoice?.customer_id  ?? initialData?.customer_id ?? "",
+      invoice_date:     invoice?.invoice_date ?? today,
+      due_date:         invoice?.due_date     ?? defaultDueDate,
+      status:           initialStatus(),
+      notes:            invoice?.notes        ?? initialData?.notes        ?? "",
+      billing_address:  invoice?.billing_address  ?? initialData?.billing_address  ?? null,
+      shipping_address: invoice?.shipping_address ?? initialData?.shipping_address ?? null,
+      items:            defaultItems,
     },
   });
 
@@ -156,10 +162,10 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
       const supabase = createClient();
       const { data } = await supabase
         .from("customers")
-        .select("id, name, company_name, phone, email, gst_number, city, state")
+        .select("id, name, company_name, phone, email, gst_number, address, city, state, pincode, shipping_address")
         .eq("is_active", true)
         .order("name");
-      return data ?? [];
+      return (data ?? []) as CustomerOption[];
     },
   });
 
@@ -264,6 +270,17 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
   const customerId    = watch("customer_id");
   const currentStatus = watch("status");
 
+  function onCustomerChange(id: string, customer: CustomerOption | null) {
+    setValue("customer_id", id, { shouldValidate: true });
+    if (customer) {
+      const billing = (customer.address || customer.city || customer.state)
+        ? { line1: customer.address ?? "", line2: null, city: customer.city ?? "", state: customer.state ?? "", pincode: customer.pincode ?? "" }
+        : null;
+      setValue("billing_address", billing);
+      setValue("shipping_address", customer.shipping_address ?? null);
+    }
+  }
+
   const onProductSelect = useCallback(
     (index: number, productId: string, product: ProductOption | null) => {
       setValue(`items.${index}.product_id`, productId);
@@ -351,11 +368,13 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
       const { error: invErr } = await supabase
         .from("invoices")
         .update({
-          customer_id:  values.customer_id,
-          invoice_date: values.invoice_date,
-          due_date:     values.due_date || null,
-          status:       values.status,
-          notes:        values.notes || null,
+          customer_id:      values.customer_id,
+          invoice_date:     values.invoice_date,
+          due_date:         values.due_date || null,
+          status:           values.status,
+          notes:            values.notes || null,
+          billing_address:  values.billing_address  ?? null,
+          shipping_address: values.shipping_address ?? null,
           subtotal, tax_amount, total_amount,
         })
         .eq("id", invoice.id);
@@ -434,15 +453,17 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
       const { data: invData, error: invErr } = await supabase
         .from("invoices")
         .insert({
-          customer_id:    values.customer_id,
-          invoice_date:   values.invoice_date,
-          due_date:       values.due_date || null,
-          status:         values.status,
-          notes:          values.notes || null,
+          customer_id:      values.customer_id,
+          invoice_date:     values.invoice_date,
+          due_date:         values.due_date || null,
+          status:           values.status,
+          notes:            values.notes || null,
+          billing_address:  values.billing_address  ?? null,
+          shipping_address: values.shipping_address ?? null,
           subtotal, tax_amount, total_amount,
-          quotation_id:   initialData?.quotation_id ?? null,
-          created_by:     user?.id ?? null,
-          invoice_number: "",
+          quotation_id:     initialData?.quotation_id ?? null,
+          created_by:       user?.id ?? null,
+          invoice_number:   "",
         })
         .select("id, invoice_number")
         .single();
@@ -514,7 +535,7 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
           <CustomerCombobox
             customers={customers}
             value={customerId ?? ""}
-            onChange={(id) => setValue("customer_id", id, { shouldValidate: true })}
+            onChange={onCustomerChange}
             error={errors.customer_id?.message}
             disabled={isSubmitting}
           />

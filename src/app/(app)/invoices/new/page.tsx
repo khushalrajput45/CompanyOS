@@ -14,16 +14,18 @@ async function fetchQuotationForConversion(id: string): Promise<InvoiceInitialDa
   const supabase = createClient();
   const { data, error } = await supabase
     .from("quotations")
-    .select("id, customer_id, notes, items:quotation_items(product_id, description, quantity, unit_price, tax_rate, sort_order)")
+    .select("id, customer_id, notes, billing_address, shipping_address, items:quotation_items(product_id, description, quantity, unit_price, tax_rate, sort_order)")
     .eq("id", id)
     .single();
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d = data as any;
   return {
-    quotation_id: d.id,
-    customer_id:  d.customer_id,
-    notes:        d.notes ?? null,
+    quotation_id:     d.id,
+    customer_id:      d.customer_id,
+    notes:            d.notes ?? null,
+    billing_address:  d.billing_address  ?? null,
+    shipping_address: d.shipping_address ?? null,
     items: (d.items ?? [])
       .sort((a: { sort_order: number | null }, b: { sort_order: number | null }) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
       .map((it: { product_id: string | null; description: string; quantity: number; unit_price: number; tax_rate: number }) => ({
