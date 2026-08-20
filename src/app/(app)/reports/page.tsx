@@ -469,7 +469,7 @@ function ReportsPageContent() {
         header: "Type",
         cell: ({ getValue }) => {
           const t = getValue() as string;
-          const isIn = ["receipt", "transfer_in", "return"].includes(t);
+          const isIn = ["receipt", "transfer_in", "return", "adjustment"].includes(t);
           return (
             <Badge variant="outline" className={`capitalize text-xs ${isIn ? "text-green-600 border-green-300" : "text-red-600 border-red-300"}`}>
               {t.replace("_", " ")}
@@ -481,7 +481,7 @@ function ReportsPageContent() {
         accessorKey: "qty",
         header: "Qty",
         cell: ({ row }) => {
-          const isIn = ["receipt", "transfer_in", "return"].includes(row.original.type);
+          const isIn = ["receipt", "transfer_in", "return", "adjustment"].includes(row.original.type);
           return (
             <span className={`font-semibold ${isIn ? "text-green-600" : "text-red-600"}`}>
               {isIn ? "+" : "-"}{row.original.qty}

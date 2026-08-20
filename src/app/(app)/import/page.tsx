@@ -162,6 +162,7 @@ export default function ImportPage() {
         reorder_qty: row.reorder_qty ? Number(row.reorder_qty) : 0,
         warranty_months: row.warranty_months ? Number(row.warranty_months) : null,
         hsn_code: row.hsn_code ? String(row.hsn_code) : null,
+        tax_rate: row.tax_rate != null && [0, 5, 12, 18, 28].includes(Number(row.tax_rate)) ? Number(row.tax_rate) : null,
         is_active: true,
       };
 
@@ -194,7 +195,7 @@ export default function ImportPage() {
   const errorCount = preview.filter((r) => r._status === "error").length;
   const warnCount = preview.filter((r) => r._status === "valid" && r._errors.some((e) => e.message.includes("already exists"))).length;
 
-  const previewColumns = ["sku", "name", "unit", "selling_price", "cost_price", "mrp", "brand", "category", "reorder_point", "warranty_months"];
+  const previewColumns = ["sku", "name", "unit", "selling_price", "cost_price", "mrp", "tax_rate", "hsn_code", "reorder_point", "warranty_months"];
 
   return (
     <div className="flex flex-col h-full">

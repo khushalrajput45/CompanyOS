@@ -631,12 +631,17 @@ function SortIcon({ col, active, dir }: { col: string; active: string; dir: Sort
 
 // ── Summary card ───────────────────────────────────────────────────────────────
 
-function SummaryCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
+function SummaryCard({ label, value, sub, color, loading }: {
+  label: string; value: string; sub?: string; color: string; loading?: boolean;
+}) {
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-1">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={`text-2xl font-bold tabular-nums ${color}`}>{value}</p>
-      {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
+    <div className="rounded-lg border bg-card p-4 space-y-1.5">
+      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{label}</p>
+      {loading
+        ? <div className="h-8 w-28 rounded bg-muted animate-pulse" />
+        : <p className={`text-2xl font-bold tabular-nums tracking-tight ${color}`}>{value}</p>
+      }
+      {sub && !loading && <p className="text-[11px] text-muted-foreground">{sub}</p>}
     </div>
   );
 }
@@ -785,6 +790,61 @@ export default function DashboardDetailPage() {
     return { totalQty, totalRev, uniqueProducts: allRows.length };
   }, [view, stockMovements, allRows]);
 
+  // ── Per-view summary cards ────────────────────────────────────────────────
+
+  const salesSummary = useMemo(() => {
+    if (view !== "sales") return null;
+    const totalSales  = allRows.reduce((s, r) => s + (r.total_amount as number || 0), 0);
+    const amtReceived = allRows.reduce((s, r) => s + (r.amount_paid  as number || 0), 0);
+    const outstanding = allRows.reduce((s, r) => s + (r.balance      as number || 0), 0);
+    return { totalSales, amtReceived, outstanding, count: allRows.length };
+  }, [view, allRows]);
+
+  const purchasesSummary = useMemo(() => {
+    if (view !== "purchases") return null;
+    const total    = allRows.reduce((s, r) => s + (r.total_amount as number || 0), 0);
+    const received = allRows.filter(r => r.status === "received").length;
+    const pending  = allRows.filter(r => r.status !== "received").length;
+    return { total, count: allRows.length, received, pending };
+  }, [view, allRows]);
+
+  const custOutstandingSummary = useMemo(() => {
+    if (view !== "customer-outstanding") return null;
+    const total    = allRows.reduce((s, r) => s + (r.outstanding as number || 0), 0);
+    const critical = allRows.filter(r => (r.days as number || 0) > 60).length;
+    return { total, count: allRows.length, critical };
+  }, [view, allRows]);
+
+  const vendOutstandingSummary = useMemo(() => {
+    if (view !== "vendor-outstanding") return null;
+    const total   = allRows.reduce((s, r) => s + (r.outstanding as number || 0), 0);
+    const poCount = allRows.reduce((s, r) => s + (r.po_count    as number || 0), 0);
+    return { total, count: allRows.length, poCount };
+  }, [view, allRows]);
+
+  const inventorySummary = useMemo(() => {
+    const INV_VIEWS = ["inventory-cost", "inventory-sale", "inventory-margin", "all-products"];
+    if (!INV_VIEWS.includes(view)) return null;
+    const costVal  = allRows.reduce((s, r) => s + (r.cost_value as number || 0), 0);
+    const saleVal  = allRows.reduce((s, r) => s + (r.sale_value as number || 0), 0);
+    const margin   = saleVal > 0 ? ((saleVal - costVal) / saleVal) * 100 : 0;
+    const lowStock = allRows.filter(r => {
+      const q = r.qty as number || 0;
+      const rp = r.reorder_point as number || 0;
+      return q > 0 && q <= rp;
+    }).length;
+    const outOfStk = allRows.filter(r => (r.qty as number || 0) === 0).length;
+    return { costVal, saleVal, margin, count: allRows.length, lowStock, outOfStk };
+  }, [view, allRows]);
+
+  const overdueSummary = useMemo(() => {
+    if (view !== "overdue-invoices") return null;
+    const total    = allRows.reduce((s, r) => s + (r.outstanding as number || 0), 0);
+    const critical = allRows.filter(r => (r.days_overdue as number || 0) > 90).length;
+    const maxDays  = allRows.reduce((m, r) => Math.max(m, r.days_overdue as number || 0), 0);
+    return { total, count: allRows.length, critical, maxDays };
+  }, [view, allRows]);
+
   // ── Row click ─────────────────────────────────────────────────────────────
   function handleRowClick(row: FlatRow) {
     const href = row._href;
@@ -877,6 +937,64 @@ export default function DashboardDetailPage() {
             <SummaryCard label="Products Sold"   value={String(topProductsSummary.uniqueProducts)} sub="distinct products"    color="text-foreground" />
             <SummaryCard label="Total Qty Sold"  value={topProductsSummary.totalQty.toLocaleString("en-IN")} sub="units dispatched" color="text-rose-600" />
             <SummaryCard label="Total Revenue"   value={fmtShort(topProductsSummary.totalRev)}   sub="from sale movements"   color="text-green-700" />
+          </div>
+        )}
+
+        {/* ── Sales report summary ──────────────────────────────────── */}
+        {view === "sales" && salesSummary && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <SummaryCard label="Total Sales"     value={fmtShort(salesSummary.totalSales)}  sub={fmtINR(salesSummary.totalSales)}  color="text-blue-700"   loading={loading} />
+            <SummaryCard label="Amount Received" value={fmtShort(salesSummary.amtReceived)} sub={fmtINR(salesSummary.amtReceived)} color="text-green-600"  loading={loading} />
+            <SummaryCard label="Outstanding"     value={fmtShort(salesSummary.outstanding)} sub={fmtINR(salesSummary.outstanding)} color="text-rose-600"   loading={loading} />
+            <SummaryCard label="Invoices"        value={String(salesSummary.count)}         sub="in selected period"               color="text-foreground" loading={loading} />
+          </div>
+        )}
+
+        {/* ── Purchase report summary ───────────────────────────────── */}
+        {view === "purchases" && purchasesSummary && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <SummaryCard label="Total Purchases"  value={fmtShort(purchasesSummary.total)}          sub={fmtINR(purchasesSummary.total)}       color="text-orange-600" loading={loading} />
+            <SummaryCard label="Purchase Orders"  value={String(purchasesSummary.count)}             sub="in selected period"                   color="text-foreground" loading={loading} />
+            <SummaryCard label="Received"         value={String(purchasesSummary.received)}          sub="fully received POs"                   color="text-green-600"  loading={loading} />
+            <SummaryCard label="Pending"          value={String(purchasesSummary.pending)}           sub="awaiting receipt"                     color="text-yellow-600" loading={loading} />
+          </div>
+        )}
+
+        {/* ── Overdue invoices summary ──────────────────────────────── */}
+        {view === "overdue-invoices" && overdueSummary && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <SummaryCard label="Total Overdue"    value={fmtShort(overdueSummary.total)}    sub={fmtINR(overdueSummary.total)}     color="text-red-600"    loading={loading} />
+            <SummaryCard label="Invoices Overdue" value={String(overdueSummary.count)}      sub="awaiting payment"                 color="text-foreground" loading={loading} />
+            <SummaryCard label="Critical (>90d)"  value={String(overdueSummary.critical)}   sub="more than 90 days past due"       color="text-red-700"    loading={loading} />
+            <SummaryCard label="Oldest Overdue"   value={`${overdueSummary.maxDays}d`}      sub="days since due date"              color="text-rose-500"   loading={loading} />
+          </div>
+        )}
+
+        {/* ── Customer outstanding summary ──────────────────────────── */}
+        {view === "customer-outstanding" && custOutstandingSummary && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <SummaryCard label="Total Receivable"  value={fmtShort(custOutstandingSummary.total)}    sub={fmtINR(custOutstandingSummary.total)}   color="text-rose-600"   loading={loading} />
+            <SummaryCard label="Customers Owing"   value={String(custOutstandingSummary.count)}      sub="with unpaid balances"                   color="text-foreground" loading={loading} />
+            <SummaryCard label="Critical (>60d)"   value={String(custOutstandingSummary.critical)}   sub="customers pending over 60 days"         color="text-red-600"    loading={loading} />
+          </div>
+        )}
+
+        {/* ── Vendor outstanding summary ────────────────────────────── */}
+        {view === "vendor-outstanding" && vendOutstandingSummary && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <SummaryCard label="Total Payable"   value={fmtShort(vendOutstandingSummary.total)}   sub={fmtINR(vendOutstandingSummary.total)}   color="text-orange-600" loading={loading} />
+            <SummaryCard label="Vendors Owed"    value={String(vendOutstandingSummary.count)}     sub="with outstanding balances"              color="text-foreground" loading={loading} />
+            <SummaryCard label="Total POs"       value={String(vendOutstandingSummary.poCount)}   sub="purchase orders outstanding"            color="text-blue-600"   loading={loading} />
+          </div>
+        )}
+
+        {/* ── Inventory summary ─────────────────────────────────────── */}
+        {inventorySummary && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <SummaryCard label="Inventory Value"  value={fmtShort(inventorySummary.costVal)}  sub={fmtINR(inventorySummary.costVal)}                                                    color="text-orange-600"  loading={loading} />
+            <SummaryCard label="Sale Value"       value={fmtShort(inventorySummary.saleVal)}  sub={fmtINR(inventorySummary.saleVal)}                                                    color="text-green-700"   loading={loading} />
+            <SummaryCard label="Gross Margin"     value={fmtPct(inventorySummary.margin)}     sub="potential margin at sale price"                                                      color="text-emerald-600" loading={loading} />
+            <SummaryCard label="Products"         value={String(inventorySummary.count)}      sub={`${inventorySummary.lowStock} low stock · ${inventorySummary.outOfStk} out of stock`} color="text-foreground"  loading={loading} />
           </div>
         )}
 

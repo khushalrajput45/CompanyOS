@@ -387,7 +387,7 @@ export function POForm({ po, onSuccess, onCancel }: Props) {
         )}
 
         {/* Header row */}
-        <div className="hidden sm:grid grid-cols-[24px_1fr_1fr_110px_110px_90px_90px_32px] gap-2 px-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+        <div className="hidden sm:grid grid-cols-[24px_minmax(0,1fr)_minmax(0,1fr)_80px_110px_80px_90px_32px] gap-2 px-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
           <span /><span>Product</span><span>Description</span>
           <span className="text-right">Qty</span>
           <span className="text-right">Unit Cost</span>
@@ -402,11 +402,23 @@ export function POForm({ po, onSuccess, onCancel }: Props) {
             const cost      = Number(watch(`items.${i}.unit_cost`)) || 0;
             const lineTotal = qty * cost;
             const prodId    = watch(`items.${i}.product_id`);
+            const prodInfo  = prodId ? (rawProducts as ProductOption[]).find(p => p.id === prodId) ?? null : null;
+
+            function fmtP(n: number | null | undefined) {
+              return n != null ? `₹${n.toLocaleString("en-IN")}` : "—";
+            }
+
+            function stockColor(p: ProductOption) {
+              const s = p.currentStock ?? 0;
+              if (s === 0) return "text-red-600";
+              if (p.reorderPoint && s <= p.reorderPoint) return "text-yellow-600";
+              return "text-emerald-700";
+            }
 
             return (
+              <div key={field.id} className="space-y-1">
               <div
-                key={field.id}
-                className="grid grid-cols-1 sm:grid-cols-[24px_1fr_1fr_110px_110px_90px_90px_32px] gap-2 items-start p-3 sm:p-1 rounded-md border sm:border-0 bg-muted/20 sm:bg-transparent"
+                className="grid grid-cols-1 sm:grid-cols-[24px_minmax(0,1fr)_minmax(0,1fr)_80px_110px_80px_90px_32px] gap-2 items-start p-3 sm:p-1 rounded-md border sm:border-0 bg-muted/20 sm:bg-transparent"
               >
                 <div className="hidden sm:flex items-center justify-center pt-2 text-muted-foreground/40">
                   <GripVertical className="h-4 w-4" />
@@ -420,6 +432,7 @@ export function POForm({ po, onSuccess, onCancel }: Props) {
                     onChange={(id, product) => onProductSelect(i, id, product)}
                     placeholder="Select product…"
                     disabled={isSubmitting}
+                    hideDetails
                   />
                 </div>
 
@@ -482,6 +495,48 @@ export function POForm({ po, onSuccess, onCancel }: Props) {
                     <Trash2 className="h-3.5 w-3.5 text-destructive" />
                   </Button>
                 </div>
+              </div>
+
+              {/* Full-width product info strip */}
+              {prodInfo && (
+                <div className="ml-0 sm:ml-6 px-3 py-1.5 rounded-md bg-muted/50 border border-border/50 text-[11px] flex flex-wrap gap-x-4 gap-y-0.5 items-center">
+                  <span>
+                    <span className="text-muted-foreground">Cost </span>
+                    <span className="font-semibold text-foreground">{fmtP(prodInfo.cost_price)}</span>
+                  </span>
+                  <span className="text-muted-foreground/40">·</span>
+                  <span>
+                    <span className="text-muted-foreground">Sell </span>
+                    <span className="font-medium">{fmtP(prodInfo.selling_price)}</span>
+                  </span>
+                  <span className="text-muted-foreground/40">·</span>
+                  <span>
+                    <span className="text-muted-foreground">Stock </span>
+                    <span className={`font-semibold ${stockColor(prodInfo)}`}>{prodInfo.currentStock ?? "—"}</span>
+                  </span>
+                  {prodInfo.reorderPoint !== undefined && (
+                    <>
+                      <span className="text-muted-foreground/40">·</span>
+                      <span>
+                        <span className="text-muted-foreground">Reorder </span>
+                        <span className="font-medium">{prodInfo.reorderPoint}</span>
+                      </span>
+                    </>
+                  )}
+                  {prodInfo.brand && (
+                    <>
+                      <span className="text-muted-foreground/40">·</span>
+                      <span className="text-muted-foreground">{prodInfo.brand}</span>
+                    </>
+                  )}
+                  {prodInfo.category && (
+                    <>
+                      <span className="text-muted-foreground/40">·</span>
+                      <span className="text-muted-foreground">{prodInfo.category}</span>
+                    </>
+                  )}
+                </div>
+              )}
               </div>
             );
           })}

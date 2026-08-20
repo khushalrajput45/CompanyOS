@@ -548,7 +548,18 @@ export default function InvoiceDetailPage() {
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <div className="space-y-1">
-                  <Label>Amount (₹) *</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>Amount (₹) *</Label>
+                    {balanceDue > 0 && (
+                      <button
+                        type="button"
+                        className="text-xs text-primary hover:underline leading-none"
+                        onClick={() => setPayAmount(balanceDue.toFixed(2))}
+                      >
+                        Pay full {fmtINR(balanceDue)}
+                      </button>
+                    )}
+                  </div>
                   <Input
                     type="number" min={0.01} step={0.01}
                     placeholder={`Max: ${fmtINR(balanceDue)}`}

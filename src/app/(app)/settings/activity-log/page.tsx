@@ -12,6 +12,13 @@ import type { AdminEvent } from "@/lib/types";
 
 // ── Event config ──────────────────────────────────────────────────────────────
 
+type EventMetadata = Record<string, unknown> | null;
+
+function getMetadataValue(metadata: EventMetadata, key: string): string {
+  const value = metadata?.[key];
+  return typeof value === "string" ? value : "?";
+}
+
 const EVENT_CONFIG: Record<string, {
   label: string;
   icon: React.ElementType;
@@ -22,7 +29,7 @@ const EVENT_CONFIG: Record<string, {
     label: "User Invited",
     icon: UserPlus,
     color: "text-blue-600 bg-blue-50",
-    detail: e => `Invited ${e.target_name ?? e.target_email ?? "user"} as ${(e.metadata as any)?.role ?? ""}`,
+    detail: e => `Invited ${e.target_name ?? e.target_email ?? "user"} as ${getMetadataValue(e.metadata, "role")}`,
   },
   invite_resent: {
     label: "Invite Resent",
@@ -41,8 +48,9 @@ const EVENT_CONFIG: Record<string, {
     icon: Shield,
     color: "text-purple-600 bg-purple-50",
     detail: e => {
-      const m = e.metadata as any;
-      return `Changed ${e.target_name ?? "user"} from ${m?.from_role ?? "?"} → ${m?.to_role ?? "?"}`;
+      const fromRole = getMetadataValue(e.metadata, "from_role");
+      const toRole = getMetadataValue(e.metadata, "to_role");
+      return `Changed ${e.target_name ?? "user"} from ${fromRole} → ${toRole}`;
     },
   },
   user_disabled: {

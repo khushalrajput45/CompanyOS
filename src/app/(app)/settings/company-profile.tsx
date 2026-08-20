@@ -371,12 +371,8 @@ interface Props {
 
 export function CompanyProfileSettings({ settings, isAdmin }: Props) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<FormState>(settings ? settingsToForm(settings) : DEFAULTS);
+  const [form, setForm] = useState<FormState>(() => (settings ? settingsToForm(settings) : DEFAULTS));
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormState, string>>>({});
-
-  useEffect(() => {
-    if (settings) setForm(settingsToForm(settings));
-  }, [settings?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(prev => ({ ...prev, [key]: e.target.value }));

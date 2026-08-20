@@ -79,7 +79,8 @@ async function fetchPOs(): Promise<PORow[]> {
   const { data, error } = await supabase
     .from("purchase_orders")
     .select("*, vendor:vendors(id, name, company_name)")
-    .order("po_date", { ascending: false });
+    .order("po_date",    { ascending: false })
+    .order("created_at", { ascending: false });
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((po: any) => ({

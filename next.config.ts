@@ -1,8 +1,14 @@
 import type { NextConfig } from "next";
 
+const projectRoot = __dirname;
+
 const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
+  outputFileTracingRoot: projectRoot,
+  turbopack: {
+    root: projectRoot,
+  },
 
   experimental: {
     optimizePackageImports: [

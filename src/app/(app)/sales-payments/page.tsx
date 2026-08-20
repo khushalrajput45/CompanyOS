@@ -20,17 +20,18 @@ import { Search, AlertCircle, Banknote, ChevronLeft, ChevronRight, X } from "luc
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type VPRow = {
+type SPRow = {
   id: string;
-  payment_number: string;
   payment_date: string;
   payment_method: string;
-  reference_no: string | null;
   amount: number;
-  vendor_id: string;
-  purchase_order_id: string | null;
-  vendor: { id: string; name: string; company_name: string | null } | null;
-  purchase_order: { id: string; po_number: string } | null;
+  notes: string | null;
+  invoice_id: string;
+  invoice: {
+    id: string;
+    invoice_number: string;
+    customer: { id: string; name: string; company_name: string | null } | null;
+  } | null;
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -54,84 +55,69 @@ function fmtINR(n: number) {
 
 // ── Data fetcher ──────────────────────────────────────────────────────────────
 
-async function fetchVendorPayments(): Promise<VPRow[]> {
+async function fetchSalesPayments(): Promise<SPRow[]> {
   const supabase = createClient();
   const { data, error } = await supabase
-    .from("vendor_payments")
+    .from("invoice_payments")
     .select(
-      "id, payment_number, payment_date, payment_method, reference_no, amount, " +
-      "vendor_id, purchase_order_id, " +
-      "vendor:vendors(id, name, company_name), " +
-      "purchase_order:purchase_orders(id, po_number)"
+      "id, payment_date, payment_method, amount, notes, invoice_id, " +
+      "invoice:invoices(id, invoice_number, customer:customers(id, name, company_name))"
     )
     .order("payment_date", { ascending: false })
     .order("created_at",   { ascending: false });
   if (error) throw error;
-  return (data ?? []) as unknown as VPRow[];
+  return (data ?? []) as unknown as SPRow[];
 }
 
-// ── Module-level row model factories (avoid recreation on every render) ────────
+// ── Module-level row model factories ──────────────────────────────────────────
 
-const coreRowModel    = getCoreRowModel<VPRow>();
-const filteredRowModel = getFilteredRowModel<VPRow>();
-const paginationRowModel = getPaginationRowModel<VPRow>();
+const coreRowModel       = getCoreRowModel<SPRow>();
+const filteredRowModel   = getFilteredRowModel<SPRow>();
+const paginationRowModel = getPaginationRowModel<SPRow>();
 
 // ── Global filter ─────────────────────────────────────────────────────────────
 
-const globalFilter: FilterFn<VPRow> = (row, _col, filterValue: string) => {
+const globalFilterFn: FilterFn<SPRow> = (row, _col, filterValue: string) => {
   const q = filterValue.toLowerCase();
   const d = row.original;
   return (
-    (d.payment_number ?? "").toLowerCase().includes(q) ||
-    (d.vendor?.name ?? "").toLowerCase().includes(q) ||
-    (d.vendor?.company_name ?? "").toLowerCase().includes(q) ||
-    (d.reference_no ?? "").toLowerCase().includes(q) ||
-    (d.purchase_order?.po_number ?? "").toLowerCase().includes(q)
+    (d.invoice?.invoice_number ?? "").toLowerCase().includes(q) ||
+    (d.invoice?.customer?.name ?? "").toLowerCase().includes(q) ||
+    (d.invoice?.customer?.company_name ?? "").toLowerCase().includes(q) ||
+    (d.notes ?? "").toLowerCase().includes(q)
   );
 };
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
-const columns: ColumnDef<VPRow>[] = [
-  {
-    accessorKey: "payment_number",
-    header: "Payment #",
-    cell: ({ getValue }) => (
-      <span className="font-mono font-semibold text-primary text-xs">
-        {String(getValue())}
-      </span>
-    ),
-  },
+const columns: ColumnDef<SPRow>[] = [
   {
     accessorKey: "payment_date",
     header: "Date",
     cell: ({ getValue }) => fmtDate(String(getValue())),
   },
   {
-    id: "vendor",
-    header: "Vendor",
-    cell: ({ row }) => {
-      const v = row.original.vendor;
-      if (!v) return <span className="text-muted-foreground">—</span>;
-      return (
-        <div>
-          <p className="font-medium text-sm">{v.name}</p>
-          {v.company_name && (
-            <p className="text-xs text-muted-foreground">{v.company_name}</p>
-          )}
-        </div>
-      );
-    },
+    id: "invoice",
+    header: "Invoice #",
+    cell: ({ row }) => (
+      <span className="font-mono font-semibold text-primary text-xs">
+        {row.original.invoice?.invoice_number ?? "—"}
+      </span>
+    ),
   },
   {
-    id: "po_ref",
-    header: "PO Ref",
+    id: "customer",
+    header: "Customer",
     cell: ({ row }) => {
-      const po = row.original.purchase_order;
-      return po ? (
-        <span className="font-mono text-xs text-muted-foreground">{po.po_number}</span>
-      ) : (
-        <span className="text-muted-foreground text-xs">—</span>
+      const c = row.original.invoice?.customer;
+      if (!c) return <span className="text-muted-foreground">—</span>;
+      return (
+        <div>
+          <p className="font-medium text-sm">{c.name}</p>
+          {c.company_name && (
+            <p className="text-xs text-muted-foreground">{c.company_name}</p>
+          )}
+        </div>
       );
     },
   },
@@ -141,12 +127,12 @@ const columns: ColumnDef<VPRow>[] = [
     cell: ({ getValue }) => METHOD_LABELS[String(getValue())] ?? String(getValue()),
   },
   {
-    accessorKey: "reference_no",
-    header: "Reference",
+    accessorKey: "notes",
+    header: "Notes",
     cell: ({ getValue }) => {
       const v = getValue();
       return v ? (
-        <span className="font-mono text-xs text-muted-foreground">{String(v)}</span>
+        <span className="text-xs text-muted-foreground">{String(v)}</span>
       ) : (
         <span className="text-muted-foreground text-xs">—</span>
       );
@@ -165,15 +151,15 @@ const columns: ColumnDef<VPRow>[] = [
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function VendorPaymentsPage() {
+export default function SalesPaymentsPage() {
   const router = useRouter();
-  const [search, setSearch] = useState("");
+  const [search, setSearch]   = useState("");
   const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo]   = useState("");
+  const [dateTo, setDateTo]     = useState("");
 
   const { data = [], isLoading, error } = useQuery({
-    queryKey: ["vendor-payments-list"],
-    queryFn: fetchVendorPayments,
+    queryKey: ["sales-payments-list"],
+    queryFn: fetchSalesPayments,
   });
 
   const filteredData = useMemo(() => {
@@ -184,17 +170,14 @@ export default function VendorPaymentsPage() {
     });
   }, [data, dateFrom, dateTo]);
 
-  const totalAmount = useMemo(
-    () => data.reduce((s, r) => s + r.amount, 0),
-    [data]
-  );
+  const totalAmount = useMemo(() => data.reduce((s, r) => s + r.amount, 0), [data]);
 
   const table = useReactTable({
     data: filteredData,
     columns,
     state: { globalFilter: search },
     onGlobalFilterChange: setSearch,
-    globalFilterFn: globalFilter,
+    globalFilterFn,
     getCoreRowModel: coreRowModel,
     getFilteredRowModel: filteredRowModel,
     getPaginationRowModel: paginationRowModel,
@@ -212,21 +195,21 @@ export default function VendorPaymentsPage() {
   return (
     <div className="flex flex-col h-full">
       <Header
-        title="Vendor Payments"
-        breadcrumbs={[{ label: "Vendor Payments" }]}
+        title="Sales Payments"
+        breadcrumbs={[{ label: "Sales Payments" }]}
       />
 
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-6xl mx-auto space-y-4">
 
-          {/* ── Search + date filter + summary ───────────────── */}
+          {/* ── Filters ─────────────────────────────────────────── */}
           <div className="flex flex-col gap-3">
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
               <div className="relative w-full sm:w-72">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   className="pl-9"
-                  placeholder="Search payment #, vendor, reference…"
+                  placeholder="Search invoice #, customer…"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />
@@ -267,7 +250,7 @@ export default function VendorPaymentsPage() {
             </div>
           </div>
 
-          {/* ── Table ────────────────────────────────────────── */}
+          {/* ── Table ────────────────────────────────────────────── */}
           <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
             {isLoading ? (
               <div className="p-6 space-y-3">
@@ -276,16 +259,14 @@ export default function VendorPaymentsPage() {
             ) : error ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <AlertCircle className="h-8 w-8 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  Could not load payments. Ensure migration 014 is applied.
-                </p>
+                <p className="text-sm text-muted-foreground">Could not load payments.</p>
               </div>
             ) : data.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <Banknote className="h-8 w-8 text-muted-foreground" />
                 <p className="font-medium text-sm">No payments recorded yet</p>
                 <p className="text-xs text-muted-foreground">
-                  Record a payment from a vendor&apos;s detail page.
+                  Record a payment from an invoice&apos;s detail page.
                 </p>
               </div>
             ) : (
@@ -318,8 +299,8 @@ export default function VendorPaymentsPage() {
                           key={row.id}
                           className="cursor-pointer hover:bg-muted/30 transition-colors"
                           onClick={() => {
-                            if (row.original.vendor_id) {
-                              router.push(`/vendors/${row.original.vendor_id}`);
+                            if (row.original.invoice_id) {
+                              router.push(`/invoices/${row.original.invoice_id}`);
                             }
                           }}
                         >
@@ -334,7 +315,7 @@ export default function VendorPaymentsPage() {
                   </TableBody>
                 </Table>
 
-                {/* ── Pagination ─────────────────────────────── */}
+                {/* ── Pagination ─────────────────────────────────── */}
                 {table.getPageCount() > 1 && (
                   <div className="flex items-center justify-between px-4 py-3 border-t">
                     <p className="text-xs text-muted-foreground">

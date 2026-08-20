@@ -857,7 +857,18 @@ export default function VendorDetailPage() {
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Amount (₹) *</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Amount (₹) *</Label>
+                  {outstanding > 0.005 && (
+                    <button
+                      type="button"
+                      className="text-xs text-primary hover:underline leading-none"
+                      onClick={() => setPayAmount(Math.max(0, outstanding).toFixed(2))}
+                    >
+                      Pay full {fmtINR(Math.max(0, outstanding))}
+                    </button>
+                  )}
+                </div>
                 <Input
                   type="number"
                   min={0.01}

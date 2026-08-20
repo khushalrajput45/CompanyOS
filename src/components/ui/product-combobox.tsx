@@ -25,6 +25,7 @@ interface Props {
   disabled?: boolean;
   error?: string;
   isOutbound?: boolean;                                   // enables stock-out validation UI
+  hideDetails?: boolean;                                  // suppress the inline info strip
 }
 
 const MAX_RESULTS = 50;
@@ -48,7 +49,7 @@ function fmt(n: number | null | undefined) {
 }
 
 // ── Component ─────────────────────────────────────────────────
-export function ProductCombobox({ products, value, onChange, placeholder = "Search name, SKU, brand, model…", disabled, error, isOutbound }: Props) {
+export function ProductCombobox({ products, value, onChange, placeholder = "Search name, SKU, brand, model…", disabled, error, isOutbound, hideDetails }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
@@ -265,58 +266,60 @@ export function ProductCombobox({ products, value, onChange, placeholder = "Sear
         </ul>
       )}
 
-      {/* ── Selected product details panel ──────────────────── */}
-      {selected && !open && (
-        <div className="mt-2 rounded-md border bg-muted/30 px-3 py-2.5 text-xs">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 sm:grid-cols-4">
-            <div>
-              <p className="text-muted-foreground mb-0.5">Current Stock</p>
-              {(() => {
-                const { label, color } = stockStatus(selected);
-                return (
-                  <p className={cn("font-semibold text-sm", color)}>
-                    {selected.currentStock ?? "—"}
-                    {isOutbound && selected.currentStock === 0 && (
-                      <span className="ml-1 text-[10px] font-normal text-red-500">⚠ {label}</span>
-                    )}
-                  </p>
-                );
-              })()}
-            </div>
-            <div>
-              <p className="text-muted-foreground mb-0.5">Reorder Level</p>
-              <p className="font-medium text-sm">{selected.reorderPoint ?? "—"}</p>
-            </div>
-            {selected.category && (
-              <div>
-                <p className="text-muted-foreground mb-0.5">Category</p>
-                <p className="font-medium text-sm truncate">{selected.category}</p>
-              </div>
-            )}
-            <div>
-              <p className="text-muted-foreground mb-0.5">Selling Price</p>
-              <p className="font-medium text-sm">{fmt(selected.selling_price)}</p>
-            </div>
-            {selected.cost_price != null && (
-              <div>
-                <p className="text-muted-foreground mb-0.5">Cost Price</p>
-                <p className="font-medium text-sm">{fmt(selected.cost_price)}</p>
-              </div>
-            )}
-            {selected.brand && (
-              <div>
-                <p className="text-muted-foreground mb-0.5">Brand</p>
-                <p className="font-medium text-sm">{selected.brand}</p>
-              </div>
+      {/* ── Selected product info strip ───────────────────────── */}
+      {selected && !open && !hideDetails && (() => {
+        const { color } = stockStatus(selected);
+        const parts: React.ReactNode[] = [];
+
+        parts.push(
+          <span key="cost">
+            <span className="text-muted-foreground">Cost </span>
+            <span className="font-semibold text-foreground">{fmt(selected.cost_price)}</span>
+          </span>
+        );
+        parts.push(
+          <span key="sell">
+            <span className="text-muted-foreground">Sell </span>
+            <span className="font-medium">{fmt(selected.selling_price)}</span>
+          </span>
+        );
+        if (selected.currentStock !== undefined) {
+          parts.push(
+            <span key="stock">
+              <span className="text-muted-foreground">Stock </span>
+              <span className={cn("font-semibold", color)}>{selected.currentStock}</span>
+            </span>
+          );
+        }
+        if (selected.reorderPoint !== undefined) {
+          parts.push(
+            <span key="reorder">
+              <span className="text-muted-foreground">Reorder </span>
+              <span className="font-medium">{selected.reorderPoint}</span>
+            </span>
+          );
+        }
+        if (selected.brand) {
+          parts.push(<span key="brand" className="text-muted-foreground">{selected.brand}</span>);
+        }
+        if (selected.category) {
+          parts.push(<span key="cat" className="text-muted-foreground">{selected.category}</span>);
+        }
+
+        return (
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] px-0.5">
+            {parts.map((part, i) => (
+              <span key={i} className="flex items-center gap-x-2">
+                {i > 0 && <span className="text-muted-foreground/40">·</span>}
+                {part}
+              </span>
+            ))}
+            {isOutbound && selected.currentStock === 0 && (
+              <span className="text-red-500 font-semibold">⚠ Out of stock</span>
             )}
           </div>
-          {isOutbound && selected.currentStock !== undefined && selected.currentStock > 0 && (
-            <p className="mt-1.5 text-[11px] text-muted-foreground border-t pt-1.5">
-              Available to dispatch: <span className="font-semibold text-foreground">{selected.currentStock}</span> units
-            </p>
-          )}
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

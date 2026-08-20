@@ -35,6 +35,7 @@ const productSchema = z.object({
   reorder_qty: z.coerce.number().int("Quantity must be a whole number").min(0).default(0),
   warranty_months: z.coerce.number().int("Must be a whole number").min(0).optional(),
   hsn_code: z.string().optional(),
+  tax_rate: z.coerce.number().min(0).max(100).optional().nullable(),
   is_active: z.boolean().default(true),
 });
 
@@ -71,6 +72,7 @@ export function ProductForm({ product, onSuccess }: Props) {
       reorder_qty: product?.reorder_qty ?? 0,
       warranty_months: product?.warranty_months ?? undefined,
       hsn_code: product?.hsn_code ?? "",
+      tax_rate: product?.tax_rate ?? null,
       is_active: product?.is_active ?? true,
     },
   });
@@ -118,6 +120,7 @@ export function ProductForm({ product, onSuccess }: Props) {
       reorder_qty: values.reorder_qty,
       warranty_months: values.warranty_months ?? null,
       hsn_code: values.hsn_code || null,
+      tax_rate: values.tax_rate ?? null,
       is_active: values.is_active,
     };
 
@@ -292,10 +295,29 @@ export function ProductForm({ product, onSuccess }: Props) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div className="space-y-1">
           <Label>HSN Code</Label>
           <Input {...register("hsn_code")} placeholder="84713020" />
+        </div>
+        <div className="space-y-1">
+          <Label>GST Rate (%)</Label>
+          <Select
+            value={watch("tax_rate") != null ? String(watch("tax_rate")) : ""}
+            onValueChange={(v) => setValue("tax_rate", v === "" ? null : Number(v))}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select rate" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">— None —</SelectItem>
+              <SelectItem value="0">0% (Exempt)</SelectItem>
+              <SelectItem value="5">5%</SelectItem>
+              <SelectItem value="12">12%</SelectItem>
+              <SelectItem value="18">18%</SelectItem>
+              <SelectItem value="28">28%</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-1">
           <Label>Status</Label>

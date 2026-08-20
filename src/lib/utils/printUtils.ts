@@ -10,13 +10,15 @@ export function escHtml(s: string | null | undefined): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Format an Address object into a comma-separated single line. */
+/** Format an Address object into multi-line HTML (each line separated by &lt;br&gt;). */
 export function fmtAddress(addr: Address | null | undefined): string {
   if (!addr) return "";
-  return [addr.line1, addr.line2, addr.city, addr.state, addr.pincode]
-    .filter(Boolean)
-    .map(s => escHtml(s!))
-    .join(", ");
+  const lines: string[] = [];
+  if (addr.line1) lines.push(escHtml(addr.line1));
+  if (addr.line2) lines.push(escHtml(addr.line2));
+  const cityLine = [addr.city, addr.state, addr.pincode].filter(Boolean).map(s => escHtml(s!)).join(", ");
+  if (cityLine) lines.push(cityLine);
+  return lines.join("<br>");
 }
 
 /**

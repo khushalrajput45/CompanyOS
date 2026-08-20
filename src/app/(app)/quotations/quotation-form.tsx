@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { CustomerCombobox, type CustomerOption } from "@/components/ui/customer-combobox";
 import { ProductCombobox, type ProductOption } from "@/components/ui/product-combobox";
+import { AddressCard } from "@/components/ui/address-card";
 import { Plus, Trash2, GripVertical } from "lucide-react";
 import { cn, preventDecimalInput } from "@/lib/utils";
 import type { Quotation } from "@/lib/types";
@@ -311,7 +312,10 @@ export function QuotationForm({ quotation, onSuccess, onCancel }: Props) {
     }
   }
 
-  const currentStatus = watch("status");
+  const currentStatus    = watch("status");
+  const billingAddress   = watch("billing_address");
+  const shippingAddress  = watch("shipping_address");
+  const selectedCustomer = customers.find(c => c.id === customerId) ?? null;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -365,6 +369,24 @@ export function QuotationForm({ quotation, onSuccess, onCancel }: Props) {
           </div>
         </div>
       </div>
+
+      {/* ── Billing / Shipping Addresses ─────────────────────── */}
+      {selectedCustomer && (
+        <div className="rounded-lg border bg-card p-5 space-y-3">
+          <h3 className="text-sm font-semibold">Billing &amp; Shipping</h3>
+          <AddressCard
+            customerName={selectedCustomer.name}
+            companyName={selectedCustomer.company_name}
+            gstNumber={selectedCustomer.gst_number}
+            phone={selectedCustomer.phone}
+            billingAddress={billingAddress ?? null}
+            shippingAddress={shippingAddress ?? null}
+            onBillingChange={addr => setValue("billing_address", addr)}
+            onShippingChange={addr => setValue("shipping_address", addr)}
+            disabled={isSubmitting}
+          />
+        </div>
+      )}
 
       {/* ── Line Items ────────────────────────────────────────── */}
       <div className="rounded-lg border bg-card p-5 space-y-4">

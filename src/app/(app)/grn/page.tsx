@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -22,7 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Eye, PackageCheck, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Eye, PackageCheck, Search, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { format } from "date-fns";
 
 // ── Module-level row model factories ─────────────────────────────────────────
@@ -122,14 +122,26 @@ export default function GRNListPage() {
   const [globalFilter, setGlobalFilter]   = useState("");
   const [sorting, setSorting]             = useState<SortingState>([]);
   const [pagination, setPagination]       = useState<PaginationState>({ pageIndex: 0, pageSize: 25 });
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo]     = useState("");
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["grn-list"],
     queryFn: fetchGRNs,
   });
 
+  const filteredData = useMemo(() => {
+    return data.filter(r => {
+      if (dateFrom && r.receipt_date < dateFrom) return false;
+      if (dateTo   && r.receipt_date > dateTo)   return false;
+      return true;
+    });
+  }, [data, dateFrom, dateTo]);
+
+  const hasDateFilter = dateFrom || dateTo;
+
   const table = useReactTable({
-    data,
+    data: filteredData,
     columns,
     state: { globalFilter, sorting, pagination },
     onGlobalFilterChange: setGlobalFilter,
@@ -151,23 +163,53 @@ export default function GRNListPage() {
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-5xl mx-auto space-y-4">
 
-          {/* Search */}
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search GRN, PO number, vendor…"
-                value={globalFilter}
-                onChange={e => {
-                  setGlobalFilter(e.target.value);
-                  setPagination(p => ({ ...p, pageIndex: 0 }));
-                }}
-                className="pl-9"
-              />
+          {/* Search + date filter */}
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <div className="relative w-full sm:w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search GRN, PO number, vendor…"
+                  value={globalFilter}
+                  onChange={e => {
+                    setGlobalFilter(e.target.value);
+                    setPagination(p => ({ ...p, pageIndex: 0 }));
+                  }}
+                  className="pl-9"
+                />
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Input
+                  type="date"
+                  className="w-40 text-sm"
+                  value={dateFrom}
+                  onChange={e => { setDateFrom(e.target.value); setPagination(p => ({ ...p, pageIndex: 0 })); }}
+                  title="From date"
+                />
+                <span className="text-muted-foreground text-sm">to</span>
+                <Input
+                  type="date"
+                  className="w-40 text-sm"
+                  value={dateTo}
+                  onChange={e => { setDateTo(e.target.value); setPagination(p => ({ ...p, pageIndex: 0 })); }}
+                  title="To date"
+                />
+                {hasDateFilter && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 px-2 text-muted-foreground"
+                    onClick={() => { setDateFrom(""); setDateTo(""); }}
+                    title="Clear date filter"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <span className="text-sm text-muted-foreground sm:ml-auto">
+                {table.getFilteredRowModel().rows.length} receipts
+              </span>
             </div>
-            <span className="text-sm text-muted-foreground ml-auto">
-              {table.getFilteredRowModel().rows.length} receipts
-            </span>
           </div>
 
           {/* Table */}

@@ -79,7 +79,8 @@ async function fetchQuotations(): Promise<QuotationRow[]> {
   const { data, error } = await supabase
     .from("quotations")
     .select("*, customer:customers(name, company_name)")
-    .order("quotation_date", { ascending: false });
+    .order("quotation_date", { ascending: false })
+    .order("created_at",     { ascending: false });
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((q: any) => ({

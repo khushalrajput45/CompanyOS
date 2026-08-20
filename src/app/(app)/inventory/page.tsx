@@ -299,7 +299,7 @@ function InventoryPageContent() {
         header: "Type",
         cell: ({ getValue }) => {
           const t = getValue() as string;
-          const isIn = ["receipt", "transfer_in", "return"].includes(t);
+          const isIn = ["receipt", "transfer_in", "return", "adjustment"].includes(t);
           return (
             <Badge
               variant="outline"
@@ -315,7 +315,7 @@ function InventoryPageContent() {
         header: "Qty",
         cell: ({ row }) => {
           const t = row.original.movement_type;
-          const isIn = ["receipt", "transfer_in", "return"].includes(t);
+          const isIn = ["receipt", "transfer_in", "return", "adjustment"].includes(t);
           return (
             <span className={`font-semibold ${isIn ? "text-green-600" : "text-red-600"}`}>
               {isIn ? "+" : "-"}{row.original.quantity}
@@ -531,9 +531,9 @@ function InventoryPageContent() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-[740px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Record Stock Movement</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">Record Stock Movement</DialogTitle>
           </DialogHeader>
           <StockMovementForm
             onSuccess={() => {
@@ -543,6 +543,7 @@ function InventoryPageContent() {
               queryClient.invalidateQueries({ queryKey: ["stock-levels-summary"] });
               queryClient.invalidateQueries({ queryKey: ["dashboard-kpis"] });
             }}
+            onCancel={() => setDialogOpen(false)}
           />
         </DialogContent>
       </Dialog>

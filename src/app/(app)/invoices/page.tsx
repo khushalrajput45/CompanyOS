@@ -83,7 +83,8 @@ async function fetchInvoices(): Promise<InvoiceRow[]> {
   const { data, error } = await supabase
     .from("invoices")
     .select("*, customer:customers(name, company_name, phone, gst_number)")
-    .order("invoice_date", { ascending: false });
+    .order("invoice_date", { ascending: false })
+    .order("created_at",   { ascending: false });
   if (error) throw error;
   const today = new Date();
   today.setHours(0, 0, 0, 0);

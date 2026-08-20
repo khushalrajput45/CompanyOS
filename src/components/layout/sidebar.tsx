@@ -40,9 +40,10 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Sales",
     icon: TrendingUp,
     items: [
-      { href: "/customers",  label: "Customers",  icon: Users    },
-      { href: "/quotations", label: "Quotations", icon: FileText },
-      { href: "/invoices",   label: "Invoices",   icon: Receipt  },
+      { href: "/customers",      label: "Customers",       icon: Users    },
+      { href: "/quotations",     label: "Quotations",      icon: FileText },
+      { href: "/invoices",       label: "Invoices",        icon: Receipt  },
+      { href: "/sales-payments", label: "Sales Payments",  icon: Banknote },
     ],
   },
   {

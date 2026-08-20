@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { CustomerCombobox, type CustomerOption } from "@/components/ui/customer-combobox";
 import { ProductCombobox, type ProductOption } from "@/components/ui/product-combobox";
+import { AddressCard } from "@/components/ui/address-card";
 import { Plus, Trash2, GripVertical, AlertTriangle } from "lucide-react";
 import { cn, preventDecimalInput } from "@/lib/utils";
 import type { Invoice, StockMovement } from "@/lib/types";
@@ -113,21 +114,25 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
     return "draft";
   };
 
+  const mappedInvoiceItems = invoice?.items?.map(it => ({
+    product_id:  it.product_id  ?? "",
+    description: it.description,
+    quantity:    it.quantity,
+    unit_price:  it.unit_price,
+    tax_rate:    it.tax_rate,
+  }));
+  const mappedInitialItems = initialData?.items?.length
+    ? initialData.items.map(it => ({
+        product_id:  it.product_id ?? "",
+        description: it.description,
+        quantity:    it.quantity,
+        unit_price:  it.unit_price,
+        tax_rate:    it.tax_rate,
+      }))
+    : null;
   const defaultItems =
-    invoice?.items?.map(it => ({
-      product_id:  it.product_id  ?? "",
-      description: it.description,
-      quantity:    it.quantity,
-      unit_price:  it.unit_price,
-      tax_rate:    it.tax_rate,
-    })) ??
-    initialData?.items?.map(it => ({
-      product_id:  it.product_id ?? "",
-      description: it.description,
-      quantity:    it.quantity,
-      unit_price:  it.unit_price,
-      tax_rate:    it.tax_rate,
-    })) ??
+    mappedInvoiceItems ??
+    mappedInitialItems ??
     [{ product_id: "", description: "", quantity: 1, unit_price: 0, tax_rate: 18 }];
 
   const {
@@ -267,8 +272,11 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
-  const customerId    = watch("customer_id");
-  const currentStatus = watch("status");
+  const customerId     = watch("customer_id");
+  const currentStatus  = watch("status");
+  const billingAddress  = watch("billing_address");
+  const shippingAddress = watch("shipping_address");
+  const selectedCustomer = customers.find(c => c.id === customerId) ?? null;
 
   function onCustomerChange(id: string, customer: CustomerOption | null) {
     setValue("customer_id", id, { shouldValidate: true });
@@ -419,7 +427,7 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
         return;
       }
 
-      // 4. Create new stock movements
+      // 4. Create new stock movements and deduct from stock_levels
       if (locationId) {
         const productItems = values.items.filter(it => !!it.product_id);
         if (productItems.length > 0) {
@@ -438,8 +446,19 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
             }))
           );
           if (mvErr) {
-            setSubmitError("Invoice saved, but stock deduction failed: " + mvErr.message);
-            // Do not abort — invoice is already saved
+            setSubmitError("Invoice saved, but stock movement failed: " + mvErr.message);
+          } else {
+            for (const it of productItems) {
+              const { error: sErr } = await supabase.rpc("increment_stock_level", {
+                p_product_id:  it.product_id!,
+                p_location_id: locationId,
+                p_delta:       -it.quantity,
+              });
+              if (sErr) {
+                setSubmitError("Invoice saved, but stock deduction failed: " + sErr.message);
+                break;
+              }
+            }
           }
         }
       }
@@ -487,7 +506,7 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
         return;
       }
 
-      // Stock movements
+      // Stock movements and deduct from stock_levels
       if (locationId) {
         const productItems = values.items.filter(it => !!it.product_id);
         if (productItems.length > 0) {
@@ -506,8 +525,19 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
             }))
           );
           if (mvErr) {
-            setSubmitError("Invoice created, but stock deduction failed: " + mvErr.message + ". Please manually record stock out in Inventory.");
-            // Invoice is created — do not delete it
+            setSubmitError("Invoice created, but stock movement failed: " + mvErr.message + ". Please manually record stock out in Inventory.");
+          } else {
+            for (const it of productItems) {
+              const { error: sErr } = await supabase.rpc("increment_stock_level", {
+                p_product_id:  it.product_id!,
+                p_location_id: locationId,
+                p_delta:       -it.quantity,
+              });
+              if (sErr) {
+                setSubmitError("Invoice created, but stock deduction failed: " + sErr.message);
+                break;
+              }
+            }
           }
         }
       } else {
@@ -575,6 +605,24 @@ export function InvoiceForm({ invoice, initialData, onSuccess, onCancel }: Props
           </div>
         </div>
       </div>
+
+      {/* ── Billing / Shipping Addresses ─────────────────── */}
+      {selectedCustomer && (
+        <div className="rounded-lg border bg-card p-5 space-y-3">
+          <h3 className="text-sm font-semibold">Billing &amp; Shipping</h3>
+          <AddressCard
+            customerName={selectedCustomer.name}
+            companyName={selectedCustomer.company_name}
+            gstNumber={selectedCustomer.gst_number}
+            phone={selectedCustomer.phone}
+            billingAddress={billingAddress ?? null}
+            shippingAddress={shippingAddress ?? null}
+            onBillingChange={addr => setValue("billing_address", addr)}
+            onShippingChange={addr => setValue("shipping_address", addr)}
+            disabled={isSubmitting}
+          />
+        </div>
+      )}
 
       {/* ── Line Items ──────────────────────────────────── */}
       <div className="rounded-lg border bg-card p-5 space-y-4">
